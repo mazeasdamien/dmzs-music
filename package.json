@@ -1,0 +1,20 @@
+{
+  "name": "dmzs-music",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "setup:db": "wrangler d1 create dmzs-music",
+    "setup:r2": "wrangler r2 bucket create dmzs-music",
+    "db:schema": "wrangler d1 execute dmzs-music --remote --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute dmzs-music --local --file=./schema.sql",
+    "dl": "powershell -NoProfile -ExecutionPolicy Bypass -File downloader/run.ps1",
+    "tail": "wrangler tail",
+    "secrets": "node scripts/secrets.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

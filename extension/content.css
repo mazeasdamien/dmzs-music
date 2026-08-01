@@ -1,0 +1,51 @@
+/* Forme des pilules d'action de YouTube (36 px, coins ronds), couleur de l'app.
+   Les valeurs sont figées plutôt qu'héritées : les variables de thème de
+   YouTube changent de nom régulièrement, une couleur en dur ne casse jamais. */
+#dmzs-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 18px;
+  cursor: pointer;
+  font-family: "Roboto", "Arial", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  background: #f0a04b;
+  color: #1a1206;
+  transition: opacity .12s, background .12s;
+}
+#dmzs-add-btn:hover { opacity: .88 }
+#dmzs-add-btn:disabled { cursor: default }
+
+/* align-self : #owner est un conteneur flex étiré en hauteur ; sans ça, le
+   bouton s'étirerait au lieu de rester sur ses 36 px. */
+#dmzs-add-btn.inline { margin-left: 12px; align-self: center; flex: none }
+#dmzs-add-btn.float {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
+
+#dmzs-add-btn.ok  { background: #5fd08a; color: #06210f }
+#dmzs-add-btn.dup { background: #3f3f46; color: #f4f4f5 }
+#dmzs-add-btn.err { background: #f2615c; color: #fff }
+
+#dmzs-add-btn svg { width: 16px; height: 16px; fill: currentColor; flex: none }
+
+#dmzs-add-btn .spin {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid rgba(0, 0, 0, .25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: dmzs-spin .7s linear infinite;
+}
+@keyframes dmzs-spin { to { transform: rotate(360deg) } }

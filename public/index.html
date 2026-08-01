@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#09090b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Music">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/icon-192.png" type="image/png">
+<title>Music</title>
+<style>
+/* ─── tokens ─────────────────────────────────────────────── */
+:root{
+  --bg:#09090b; --elev:#141417; --elev2:#1d1d21;
+  --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.13);
+  --t1:#f4f4f5; --t2:#8b8b93; --t3:#56565e;
+  --acc:#f0a04b; --red:#f2615c;
+  --r:7px; --row:62px; --mini:60px;
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--t1);
+  font:400 15px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior:none;
+  user-select:none;-webkit-user-select:none;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+input{font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
+svg{display:block;flex:none}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.tr{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#app{height:100%;display:flex;flex-direction:column}
+header{flex:none;padding:calc(var(--sat) + 14px) 16px 0;background:var(--bg)}
+.htop{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
+.meta{font-size:12.5px;color:var(--t3);margin-top:3px}
+.iconbtn{width:33px;height:33px;border-radius:50%;flex:none;background:var(--elev2);color:var(--t1);transition:background .12s,transform .08s}
+.iconbtn:active{background:#2a2a30;transform:scale(.93)}
+
+.actions{display:flex;gap:8px;margin:15px 0 11px}
+/* min-width:0 : sans lui, « Lire » et « Aléatoire » refusent de se comprimer
+   sous la largeur de leur texte et poussent le bouton suivant hors de l'écran. */
+.act{flex:1;min-width:0;height:40px;border-radius:var(--r);gap:7px;background:var(--elev);border:1px solid var(--line);font-size:14.5px;font-weight:500;letter-spacing:-.005em;transition:background .12s,transform .08s}
+.act:active{background:var(--elev2);transform:scale(.985)}
+.act svg{opacity:.9}
+
+/* Bouton « tout télécharger » : largeur fixe, il ne prend pas la place des
+   deux boutons de lecture. Affiche « n/m » pendant le travail. */
+.act.sq{flex:none;min-width:44px;padding:0 11px}
+.act.sq.done{color:var(--t3)}
+.act.sq.run{color:var(--acc)}
+.act.sq .n{font-size:13px;font-variant-numeric:tabular-nums;margin-left:6px}
+
+/* Compteur d'ecoutes, masque tant que le titre n'a jamais ete joue. */
+.plays{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--t3);flex:none}
+.plays svg{opacity:.75}
+
+/* Interrupteur « Auto » : tout nouveau titre part sur l'appareil tout seul. */
+.metarow{display:flex;align-items:center;gap:7px;margin-top:3px}
+.autopill{height:18px;padding:0 7px;border-radius:9px;flex:none;background:var(--elev2);
+  color:var(--t3);border:1px solid var(--line);font-size:10.5px;font-weight:600;
+  letter-spacing:.02em;text-transform:uppercase;transition:background .12s,color .12s}
+.autopill[aria-pressed="true"]{background:rgba(240,160,75,.16);color:var(--acc);border-color:rgba(240,160,75,.35)}
+
+.search{display:flex;align-items:center;gap:7px;height:33px;padding:0 9px;background:var(--elev);border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px}
+.search svg{color:var(--t3);flex:none}
+.search input{flex:1;font-size:14px;min-width:0}
+.search input::placeholder{color:var(--t3)}
+.clr{display:none;width:17px;height:17px;border-radius:50%;background:var(--t3);color:var(--bg);flex:none}
+.search.has .clr{display:flex}
+
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#list{padding:2px 0 0}
+#pad{height:calc(var(--mini) + var(--sab) + 18px)}
+
+.row{display:flex;align-items:center;gap:11px;height:var(--row);padding:0 16px;position:relative;transition:background .1s}
+.row:active{background:rgba(255,255,255,.045)}
+.row::after{content:"";position:absolute;left:73px;right:0;bottom:0;height:1px;background:var(--line)}
+.row:last-child::after{display:none}
+
+.art{width:46px;height:46px;border-radius:5px;flex:none;position:relative;overflow:hidden;background:var(--elev2)}
+.art img{width:100%;height:100%;object-fit:cover;display:block;position:relative}
+.fb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;color:rgba(255,255,255,.45)}
+.npart .fb{font-size:84px;font-weight:500}
+
+.info{flex:1;min-width:0}
+.ttl{font-size:14.5px;font-weight:500;letter-spacing:-.007em;line-height:1.25}
+.art2{font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.25}
+.right{display:flex;align-items:center;gap:11px;flex:none}
+.dur{font-size:12.5px;color:var(--t3)}
+.off{color:var(--t3);opacity:.55}
+.off.on{color:var(--t1);opacity:.75}
+.dots{width:24px;height:34px;color:var(--t3)}
+.dots:active{color:var(--t1)}
+
+.row.cur .ttl{color:var(--acc)}
+.eq{display:flex;align-items:flex-end;gap:2px;height:12px;width:13px}
+.eq i{width:2.5px;background:var(--acc);border-radius:1px;height:30%}
+.playing .eq i:nth-child(1){animation:b .78s ease-in-out infinite alternate}
+.playing .eq i:nth-child(2){animation:b .58s .16s ease-in-out infinite alternate}
+.playing .eq i:nth-child(3){animation:b .92s .07s ease-in-out infinite alternate}
+@keyframes b{from{height:22%}to{height:100%}}
+
+/* états de travail */
+.row.busy .art2{color:var(--acc)}
+.row.err .art2{color:var(--red)}
+.pct{font-size:12.5px;color:var(--acc)}
+.rowbar{position:absolute;left:73px;right:16px;bottom:0;height:2px;background:rgba(255,255,255,.09);overflow:hidden}
+.rowbar i{display:block;height:100%;background:var(--acc);width:0;transition:width .35s ease-out}
+.row.busy .art{opacity:.55}
+.row.err .art{opacity:.4}
+
+.empty{padding:60px 34px;text-align:center;color:var(--t3);font-size:14px;line-height:1.6}
+.empty b{display:block;color:var(--t2);font-weight:500;margin-bottom:5px}
+
+#mini{
+  position:fixed;left:8px;right:8px;bottom:calc(var(--sab) + 8px);
+  height:var(--mini);border-radius:11px;overflow:hidden;
+  background:rgba(24,24,28,.97);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);
+  border:1px solid var(--line-strong);
+  display:flex;align-items:center;gap:10px;padding:0 9px;
+  transform:translateY(calc(100% + 20px));transition:transform .28s cubic-bezier(.32,.72,0,1);z-index:20;
+}
+#mini.up{transform:translateY(0)}
+#mini .art{width:42px;height:42px;border-radius:4px}
+#mini .ttl{font-size:13.5px}
+#mini .art2{font-size:11.5px;margin-top:1px}
+.mctl{display:flex;align-items:center;gap:2px;flex:none}
+.mbtn{width:38px;height:44px;color:var(--t1)}
+.mbtn:active{opacity:.5}
+#mprog{position:absolute;left:0;top:0;height:2px;background:var(--acc);width:0;transition:width .25s linear}
+
+#np{
+  position:fixed;inset:0;z-index:40;background:var(--bg);
+  display:flex;flex-direction:column;overflow:hidden;
+  padding:calc(var(--sat) + 6px) 26px calc(var(--sab) + 18px);
+  transform:translateY(100%);transition:transform .34s cubic-bezier(.32,.72,0,1);
+  will-change:transform;pointer-events:none;
+}
+#np.up{transform:translateY(0);pointer-events:auto}
+#npbg{position:absolute;inset:0;z-index:-1;background-size:cover;background-position:center;filter:blur(58px) saturate(1.5) brightness(.42);transform:scale(1.5);opacity:.85}
+#npbg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,9,11,.35),rgba(9,9,11,.9))}
+
+.nphead{display:flex;align-items:center;justify-content:space-between;flex:none;height:38px;margin:0 -8px}
+.nphead .lbl{font-size:11px;font-weight:600;letter-spacing:.075em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.nphead .iconbtn{background:rgba(255,255,255,.1)}
+
+.npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px}
+.npart .box{width:min(100%,340px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
+#np:not(.playing) .npart .box{transform:scale(.88)}
+/* position:relative indispensable : .fb est en position:absolute et passerait
+   AU-DESSUS de l'image sans ça — la pochette existe mais reste masquée par la
+   lettre de repli. Même raison que .art img plus haut. */
+.npart img{width:100%;height:100%;object-fit:cover;position:relative;display:block}
+
+.npmeta{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:18px}
+.npmeta h2{font-size:20px;font-weight:600;letter-spacing:-.017em;line-height:1.25}
+.npmeta p{font-size:15px;color:rgba(255,255,255,.6);margin-top:3px}
+.dlbtn{width:32px;height:32px;border-radius:50%;flex:none;margin-bottom:3px;background:rgba(255,255,255,.1);color:var(--t1)}
+.dlbtn.on{background:var(--acc);color:#1a1206}
+.dlbtn.wait{opacity:.5}
+
+.scrub{flex:none;margin-top:20px;padding:9px 0;cursor:pointer}
+.bar{height:4px;border-radius:2px;background:rgba(255,255,255,.16);position:relative}
+.bar span{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:rgba(255,255,255,.85);width:0}
+.bar span::after{content:"";position:absolute;right:-5px;top:50%;width:11px;height:11px;border-radius:50%;background:#fff;transform:translateY(-50%) scale(0);transition:transform .16s}
+.scrub:active .bar span::after{transform:translateY(-50%) scale(1)}
+.times{display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:rgba(255,255,255,.45)}
+
+.transport{flex:none;display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.tbtn{width:52px;height:52px;color:var(--t1);transition:opacity .1s,transform .08s}
+.tbtn:active{opacity:.45;transform:scale(.9)}
+.tbtn.sm{width:44px;height:44px;color:rgba(255,255,255,.5)}
+.tbtn.sm.on{color:var(--acc)}
+.tbtn.sm.on .dot{opacity:1}
+.dot{opacity:0}
+#npplay{width:66px;height:66px;border-radius:50%;background:#fff;color:#0a0a0c;transition:transform .09s}
+#npplay:active{transform:scale(.92)}
+
+#scrim{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
+#scrim.up{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#17171b;border-radius:15px 15px 0 0;border-top:1px solid var(--line-strong);padding:8px 16px calc(var(--sab) + 14px);transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.sheet.up{transform:translateY(0)}
+.grab{width:35px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 14px}
+.sh-t{font-size:16px;font-weight:600;letter-spacing:-.011em;margin-bottom:3px}
+.sh-s{font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.45}
+
+.urlbox{display:flex;align-items:center;gap:9px;height:44px;padding:0 12px;background:#0e0e11;border:1px solid var(--line-strong);border-radius:var(--r)}
+.urlbox input{flex:1;font-size:14.5px;min-width:0}
+.urlbox input::placeholder{color:var(--t3)}
+.paste{font-size:13px;font-weight:500;color:var(--acc);flex:none;padding:0 2px}
+/* NB : ne pas nommer cette classe « err » — elle entrerait en collision
+   avec le modificateur .row.err et masquerait les lignes en échec. */
+.formerr{display:none;font-size:13px;color:var(--red);margin-top:10px;line-height:1.45}
+.formerr.show{display:block}
+
+.cta{width:100%;height:46px;border-radius:var(--r);margin-top:16px;background:var(--acc);color:#1a1206;font-size:15px;font-weight:600;letter-spacing:-.006em;gap:8px;transition:opacity .12s,transform .08s}
+.cta:active{transform:scale(.99);opacity:.85}
+.cta:disabled{opacity:.28;pointer-events:none}
+.spin{width:15px;height:15px;border-radius:50%;flex:none;border:2px solid rgba(0,0,0,.2);border-top-color:#1a1206;animation:sp .65s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.mi{display:flex;align-items:center;gap:13px;height:50px;font-size:15px;letter-spacing:-.008em;width:100%;justify-content:flex-start;border-bottom:1px solid var(--line)}
+.mi:last-child{border-bottom:0}
+.mi svg{color:var(--t2);flex:none}
+.mi:active{opacity:.5}
+.mi.del{color:var(--red)}
+.mi.del svg{color:var(--red)}
+.mi[hidden]{display:none}
+
+#toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--sab) + 26px);transform:translate(-50%,14px);z-index:80;background:rgba(240,240,245,.96);color:#101014;padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px rgba(0,0,0,.4);max-width:82vw;text-align:center}
+#toast.up{opacity:1;transform:translate(-50%,0)}
+
+/* ─── verrouillage en portrait ────────────────────────────────
+   iOS ignore le champ "orientation" du manifeste pour une app épinglée, et
+   screen.orientation.lock() n'existe pas dans Safari : le seul verrou qui
+   tienne côté web est de refuser d'afficher l'interface en paysage.
+
+   Le garde max-height ne vise que les téléphones couchés — une fenêtre de PC
+   est en paysage elle aussi, et n'a aucune raison d'être bloquée. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:520px){
+  #app,#mini,#np,#scrim,.sheet,#toast{display:none!important}
+  #rotate{
+    position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;padding:24px;
+    background:var(--bg);text-align:center;color:var(--t2);font-size:13.5px;line-height:1.5;
+  }
+  #rotate svg{color:var(--t3)}
+  #rotate b{display:block;color:var(--t1);font-size:16px;font-weight:600;margin-bottom:4px}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="htop">
+      <div style="min-width:0">
+        <h1>Library</h1>
+        <div class="metarow">
+          <span class="meta" id="hmeta">Loading…</span>
+          <button class="autopill" id="autoDl" aria-pressed="false" title="Automatically download new tracks to this device">Auto</button>
+        </div>
+      </div>
+      <button class="iconbtn" id="addBtn" aria-label="Add">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div class="actions">
+      <button class="act" id="playAll">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Play
+      </button>
+      <button class="act" id="shufAll">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Shuffle
+      </button>
+      <button class="act sq" id="dlAll" aria-label="Download everything to this device"></button>
+    </div>
+    <div class="search" id="searchWrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input id="q" type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="clr" id="qclr" aria-label="Clear">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </header>
+  <main id="main"><div id="list"></div><div id="pad"></div></main>
+</div>
+
+<div id="mini">
+  <div id="mprog"></div>
+  <div class="art" id="mArt"></div>
+  <div class="info" id="mOpen"><div class="ttl tr" id="mTtl">—</div><div class="art2 tr" id="mArtist">—</div></div>
+  <div class="mctl">
+    <button class="mbtn" id="mPlay" aria-label="Play"></button>
+    <button class="mbtn" id="mNext" aria-label="Next">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.2v13.6a1 1 0 0 0 1.54.84l10.2-6.8a1 1 0 0 0 0-1.68L6.54 4.36A1 1 0 0 0 5 5.2z"/><rect x="17.6" y="4.6" width="2.4" height="14.8" rx="1.2"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="np">
+  <div id="npbg"></div>
+  <div class="nphead">
+    <button class="iconbtn" id="npClose" aria-label="Minimize">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="lbl" id="npSrc">Now playing</div>
+    <button class="iconbtn" id="npQueue" aria-label="Queue">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 6h13M4 12h13M4 18h9M19 13v6M22 16h-6"/></svg>
+    </button>
+  </div>
+  <div class="npart"><div class="box" id="npArt"></div></div>
+  <div class="npmeta">
+    <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
+    <button class="dlbtn" id="npDl" aria-label="Offline">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
+    </button>
+  </div>
+  <div class="scrub" id="scrub">
+    <div class="bar"><span id="npFill"></span></div>
+    <div class="times num"><span id="npCur">0:00</span><span id="npRem">-0:00</span></div>
+  </div>
+  <div class="transport">
+    <button class="tbtn sm" id="npShuf" aria-label="Shuffle">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+    </button>
+    <button class="tbtn" id="npPrev" aria-label="Previous">
+      <svg width="27" height="27" viewBox="0 0 24 24" fill="currentColor"><path d="M19 5.2v13.6a1 1 0 0 1-1.54.84l-10.2-6.8a1 1 0 0 1 0-1.68l10.2-6.8A1 1 0 0 1 19 5.2z"/><rect x="4" y="4.6" width="2.4" height="14.8" rx="1.2"/></svg>
+    </button>
+    <button id="npplay" aria-label="Play"></button>
+    <button class="tbtn" id="npNext" aria-label="Next">
+      <svg width="27" height="27" viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.2v13.6a1 1 0 0 0 1.54.84l10.2-6.8a1 1 0 0 0 0-1.68L6.54 4.36A1 1 0 0 0 5 5.2z"/><rect x="17.6" y="4.6" width="2.4" height="14.8" rx="1.2"/></svg>
+    </button>
+    <button class="tbtn sm" id="npRep" aria-label="Repeat">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3.5 3.5L17 9"/><path d="M3 12v-2a4 4 0 0 1 4-4h13.5"/><path d="M7 22l-3.5-3.5L7 15"/><path d="M21 12v2a4 4 0 0 1-4 4H3.5"/><circle class="dot" cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="scrim"></div>
+
+<div class="sheet" id="addSheet">
+  <div class="grab"></div>
+  <div class="sh-t">Add a track</div>
+  <div class="sh-s">Paste a YouTube link. The audio is fetched at the highest quality, with no re-encoding.</div>
+  <div class="urlbox">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8b8b93" stroke-width="1.9" stroke-linecap="round"><path d="M10 13.5a4 4 0 0 0 5.7.2l3-3a4 4 0 0 0-5.7-5.7L11.3 6.7"/><path d="M14 10.5a4 4 0 0 0-5.7-.2l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg>
+    <input id="url" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="paste" id="pasteBtn">Paste</button>
+  </div>
+  <div class="formerr" id="addErr"></div>
+  <button class="cta" id="addCta" disabled>Add</button>
+</div>
+
+<div class="sheet" id="menuSheet">
+  <div class="grab"></div>
+  <div class="sh-t tr" id="mnTtl"></div>
+  <div class="sh-s tr" id="mnSub" style="margin-bottom:10px"></div>
+  <button class="mi" data-a="play" id="mnPlay">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Play now
+  </button>
+  <button class="mi" data-a="next" id="mnNext">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 12h11M4 18h7M18 9v9M21.5 13.5 18 9l-3.5 4.5"/></svg>Play next
+  </button>
+  <button class="mi" data-a="dl" id="mnDl">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
+    <span id="mnDlTxt">Download to device</span>
+  </button>
+  <button class="mi" data-a="retry" id="mnRetry" hidden>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 20v-5h5"/></svg>Retry
+  </button>
+  <button class="mi del" data-a="del">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Delete
+  </button>
+</div>
+
+<div id="rotate">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.8 18.6h2.4"/><path d="M3.4 9.2A9 9 0 0 1 6 5.4"/><path d="M20.6 14.8a9 9 0 0 1-2.6 3.8"/></svg>
+  <p><b>Rotate your device</b>This app is designed for portrait.</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ═══ constantes ═══════════════════════════════════════════ */
+const MEDIA_CACHE = "dmzs-media-v1";
+const mediaURL = (id) => `/media/${id}`;
+const artURL   = (id) => `/art/${id}`;
+
+const ICON_PLAY  = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
+const ICON_PAUSE = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1.3"/><rect x="14" y="4.5" width="4" height="15" rx="1.3"/></svg>`;
+const ICON_PLAY_L  = `<svg width="25" height="25" viewBox="0 0 24 24" fill="currentColor" style="margin-left:3px"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
+const ICON_PAUSE_L = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1.3"/><rect x="14" y="4.5" width="4" height="15" rx="1.3"/></svg>`;
+
+/* ═══ état ═════════════════════════════════════════════════ */
+let tracks = [];
+let offline = new Set();          // ids disponibles hors-ligne
+let queue = [], qi = -1;
+let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 titre
+let pollTimer = null;
+let objectURL = null;             // URL blob: courante, à révoquer
+
+const REP = ["off", "all", "one"];
+const $ = (s) => document.querySelector(s);
+
+/* ═══ audio ════════════════════════════════════════════════ */
+// UN SEUL élément, créé une fois. Le premier play() vient d'un vrai geste
+// utilisateur ; l'élément reste ensuite « béni » et les changements de src
+// suivants passent, y compris depuis l'évènement `ended`.
+// (Web Audio serait un piège : son AudioContext est suspendu en arrière-plan
+//  sur iOS, ce qui tuerait la lecture écran verrouillé.)
+const audio = new Audio();
+audio.preload = "metadata";
+audio.setAttribute("playsinline", "");
+
+/* ═══ utilitaires ══════════════════════════════════════════ */
+const mmss = (s) => {
+  s = Math.max(0, Math.round(Number(s) || 0));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+};
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const fmtSize = (b) => {
+  if (!b) return "—";
+  const mo = b / 1048576;
+  return mo < 1000 ? mo.toFixed(1).replace(".", ",") + " Mo" : (mo / 1024).toFixed(1).replace(".", ",") + " Go";
+};
+const byId = (id) => tracks.find((t) => t.id === id);
+
+function artHTML(t) {
+  if (!t) return "";
+  const h = hue(t.title + t.artist);
+  // Majuscule d'abord, échappement ensuite : l'inverse produirait « &LT; »
+  // pour un titre commençant par « < ».
+  const letter = esc(((t.title || "?").trim()[0] || "?").toUpperCase());
+  return `<div class="fb" style="background:linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))">${letter}</div>` +
+         (t.status === "ready" ? `<img src="${artURL(t.id)}" alt="" loading="lazy" onerror="this.remove()">` : "");
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.add("up");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("up"), 2400);
+}
+
+/* ═══ API ══════════════════════════════════════════════════ */
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: "same-origin", ...opts });
+  if (res.status === 401) {
+    document.body.innerHTML =
+      `<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#8b8b93">
+         <div><strong style="display:block;color:#f4f4f5;font-size:17px;margin-bottom:6px">Session expired</strong>
+         Open your activation link again.</div></div>`;
+    throw new Error("401");
+  }
+  return res;
+}
+
+async function load() {
+  let data;
+  try {
+    const res = await api("/api/tracks");
+    if (!res.ok) throw new Error(res.status);
+    data = await res.json();
+  } catch (e) {
+    if (String(e.message) !== "401") console.warn("chargement impossible", e);
+    schedulePoll();
+    return;
+  }
+  tracks = data.tracks || [];
+  renderList();
+  renderNow();
+  schedulePoll();
+  autoSweep();
+}
+
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  const busy = tracks.some((t) => t.status === "pending" || t.status === "downloading");
+  if (busy && document.visibilityState === "visible") {
+    pollTimer = setTimeout(load, 1500);
+  }
+}
+
+/* ═══ hors-ligne ═══════════════════════════════════════════
+   Stockage via l'API Cache, lecture via une URL blob:.
+   On NE passe PAS par le service worker pour l'audio : Safari sonde chaque
+   <audio> avec un « Range: bytes=0-1 », et un SW qui répond 200 casse la
+   lecture. Une URL blob: contourne complètement l'interception fetch.
+   ════════════════════════════════════════════════════════ */
+async function refreshOffline() {
+  try {
+    const c = await caches.open(MEDIA_CACHE);
+    const keys = await c.keys();
+    offline = new Set(
+      keys.map((r) => new URL(r.url).pathname)
+          .filter((p) => p.startsWith("/media/"))
+          .map((p) => p.slice(7))
+    );
+  } catch { offline = new Set(); }
+}
+
+async function saveOffline(id) {
+  const c = await caches.open(MEDIA_CACHE);
+  const res = await fetch(mediaURL(id), { credentials: "same-origin" });
+  // cache.put() rejette un 206 : on exige bien une réponse complète.
+  if (res.status !== 200) throw new Error("download failed");
+  await c.put(mediaURL(id), res);
+  // La pochette est gérée par le service worker, on la réchauffe au passage.
+  fetch(artURL(id), { credentials: "same-origin" }).catch(() => {});
+  offline.add(id);
+}
+
+async function dropOffline(id) {
+  const c = await caches.open(MEDIA_CACHE);
+  await c.delete(mediaURL(id));
+  offline.delete(id);
+}
+
+/* Tout mettre sur l'appareil, en série.
+   En série et pas en parallèle : dix fetch simultanés sur un réseau mobile
+   se gênent, saturent la mémoire de Safari, et on perd le décompte. */
+let bulk = { on: false, stop: false, done: 0, total: 0 };
+
+const ICON_DL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`;
+const ICON_OK = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
+const ICON_ST = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>`;
+
+function renderDlAll() {
+  const b = $("#dlAll");
+  if (!b) return;
+  const missing = tracks.filter((t) => t.status === "ready" && !offline.has(t.id)).length;
+
+  b.classList.toggle("run", bulk.on);
+  b.classList.toggle("done", !bulk.on && !missing);
+
+  if (bulk.on) {
+    b.innerHTML = `${ICON_ST}<span class="n">${bulk.done}/${bulk.total}</span>`;
+    b.setAttribute("aria-label", "Stop downloading");
+  } else if (missing) {
+    b.innerHTML = `${ICON_DL}<span class="n">${missing}</span>`;
+    b.setAttribute("aria-label", `Download ${missing} track(s) to this device`);
+  } else {
+    b.innerHTML = ICON_OK;
+    b.setAttribute("aria-label", "Everything is on this device");
+  }
+}
+
+/* Auto : chaque nouveau titre prêt part sur l'appareil sans qu'on y pense.
+   Le réglage est propre à cet appareil — le stockage hors-ligne l'est aussi,
+   et une app épinglée a son propre conteneur, séparé de Safari. */
+let autoDl = localStorage.getItem("dmzs_auto") === "1";
+
+function renderAuto() {
+  $("#autoDl").setAttribute("aria-pressed", autoDl ? "true" : "false");
+}
+
+function autoSweep() {
+  if (!autoDl || bulk.on || !navigator.onLine) return;
+  if (!tracks.some((t) => t.status === "ready" && !offline.has(t.id))) return;
+  downloadAll(true);
+}
+
+async function downloadAll(silent = false) {
+  if (bulk.on) {
+    if (silent) return;
+    bulk.stop = true;
+    toast("Stopping after the current track…");
+    return;
+  }
+
+  const missing = tracks.filter((t) => t.status === "ready" && !offline.has(t.id));
+  if (!missing.length) return silent || toast("Everything is already on this device");
+  if (!navigator.onLine) return silent || toast("Offline — a connection is required");
+
+  bulk = { on: true, stop: false, done: 0, total: missing.length };
+  renderDlAll();
+
+  let failed = 0;
+  let full = false;
+
+  for (const t of missing) {
+    if (bulk.stop) break;
+    try {
+      await saveOffline(t.id);
+    } catch (e) {
+      failed++;
+      // Safari lève QuotaExceededError quand le conteneur de l'app est plein.
+      // Insister ne sert à rien : les suivants échoueront pareil.
+      if (e && (e.name === "QuotaExceededError" || /quota/i.test(e.message || ""))) {
+        full = true;
+        break;
+      }
+    }
+    bulk.done++;
+    renderDlAll();
+    renderList();
+  }
+
+  const stopped = bulk.stop;
+  const ok = bulk.done - failed;
+  bulk = { on: false, stop: false, done: 0, total: 0 };
+  renderDlAll();
+  renderList();
+
+  if (full) {
+    // On coupe l'auto : sans ça, chaque sondage relancerait un téléchargement
+    // condamné à échouer, en boucle.
+    if (autoDl) { autoDl = false; localStorage.setItem("dmzs_auto", "0"); renderAuto(); }
+    toast("Storage full — auto-download turned off");
+  } else if (silent) {
+    if (failed) toast(`${failed} track${failed > 1 ? "s" : ""} failed`);
+  } else if (stopped) toast(`Stopped · ${ok} on this device`);
+  else if (failed) toast(`${ok} downloaded, ${failed} failed`);
+  else toast(`${ok} track${ok > 1 ? "s" : ""} on this device`);
+}
+
+async function srcFor(id) {
+  try {
+    const c = await caches.open(MEDIA_CACHE);
+    const hit = await c.match(mediaURL(id));
+    if (hit) {
+      const blob = await hit.blob();
+      return URL.createObjectURL(blob);
+    }
+  } catch {}
+  return mediaURL(id);
+}
+
+/* ═══ rendu ════════════════════════════════════════════════ */
+function visible() {
+  const q = $("#q").value.trim().toLowerCase();
+  const list = tracks;
+  if (!q) return list;
+  return list.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q));
+}
+const playable = () => visible().filter((t) => t.status === "ready");
+
+function renderList() {
+  const rows = visible();
+  const cur = queue[qi];
+
+  $("#list").innerHTML = rows.length
+    ? rows.map((t) => {
+        const busy = t.status === "pending" || t.status === "downloading";
+        const err  = t.status === "error";
+        const isCur = t.id === cur && t.status === "ready";
+        const sub = busy ? (t.stage || "Waiting…") : err ? (t.error || "Failed") : t.artist;
+
+        let right;
+        if (busy) right = `<span class="pct num">${t.progress || 0} %</span>`;
+        else if (err) right = `<span class="pct num" style="color:var(--red)">!</span>`;
+        else if (isCur) right = `<div class="eq"><i></i><i></i><i></i></div>`;
+        else right = `<span class="off${offline.has(t.id) ? " on" : ""}">${
+              offline.has(t.id)
+                ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`
+                : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v8m0 0 3-3m-3 3-3-3"/></svg>`
+            }</span>`;
+
+        return `<div class="row${isCur ? " cur" : ""}${isCur && !audio.paused ? " playing" : ""}${busy ? " busy" : ""}${err ? " err" : ""}" data-id="${t.id}">
+          <div class="art">${artHTML(t)}</div>
+          <div class="info"><div class="ttl tr">${esc(t.title)}</div><div class="art2 tr">${esc(sub)}</div></div>
+          <div class="right">
+            ${!busy && !err && t.plays ? `<span class="plays num" title="${t.plays} play${t.plays > 1 ? "s" : ""}"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>${t.plays}</span>` : ""}
+            ${right}
+            ${!busy && !err ? `<span class="dur num">${mmss(t.duration)}</span>` : ""}
+            <button class="dots" data-menu="${t.id}" aria-label="Options">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.5" r="1.7"/></svg>
+            </button>
+          </div>
+          ${busy ? `<div class="rowbar"><i style="width:${t.progress || 0}%"></i></div>` : ""}
+        </div>`;
+      }).join("")
+    : `<div class="empty">${
+        $("#q").value.trim()
+          ? "No results."
+          : "<b>Nothing here yet.</b>Paste a YouTube link to get started."
+      }</div>`;
+
+  const ready = tracks.filter((t) => t.status === "ready");
+  const bytes = ready.reduce((s, t) => s + (t.size || 0), 0);
+  const off = ready.filter((t) => offline.has(t.id)).length;
+  $("#hmeta").textContent = ready.length
+    ? `${ready.length} track${ready.length > 1 ? "s" : ""} · ${fmtSize(bytes)} · ${off} offline`
+    : "Empty library";
+
+  $("#dlAll").hidden = !ready.length;
+  renderDlAll();
+}
+
+function renderNow() {
+  const t = byId(queue[qi]);
+  $("#mini").classList.toggle("up", !!t);
+  if (!t) return;
+
+  $("#mArt").innerHTML = artHTML(t);
+  $("#mTtl").textContent = t.title;
+  $("#mArtist").textContent = t.artist || "—";
+  $("#npArt").innerHTML = artHTML(t);
+  $("#npTtl").textContent = t.title;
+  $("#npArtist").textContent = t.artist || "—";
+  $("#npbg").style.backgroundImage = `url(${artURL(t.id)})`;
+  $("#npDl").classList.toggle("on", offline.has(t.id));
+  $("#npSrc").textContent = shuffle ? "Shuffle · Library" : "Library";
+
+  const playing = !audio.paused;
+  $("#mPlay").innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+  $("#npplay").innerHTML = playing ? ICON_PAUSE_L : ICON_PLAY_L;
+  $("#np").classList.toggle("playing", playing);
+  $("#npShuf").classList.toggle("on", shuffle);
+  $("#npRep").classList.toggle("on", repeat > 0);
+  renderProgress();
+}
+
+function renderProgress() {
+  const t = byId(queue[qi]);
+  if (!t) return;
+  const dur = audio.duration && isFinite(audio.duration) ? audio.duration : t.duration || 0;
+  const pos = audio.currentTime || 0;
+  const p = dur ? Math.min(100, (pos / dur) * 100) : 0;
+  $("#npFill").style.width = p + "%";
+  $("#mprog").style.width = p + "%";
+  $("#npCur").textContent = mmss(pos);
+  $("#npRem").textContent = "-" + mmss(Math.max(0, dur - pos));
+}
+
+/* ═══ Media Session ════════════════════════════════════════ */
+function updateMediaSession(t) {
+  if (!("mediaSession" in navigator) || !t) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title,
+      artist: t.artist || "",
+      album: "Library",
+      // Fournir aussi de petites tailles : sans elles, le lecteur compact de
+      // l'écran verrouillé iOS affiche un carré gris.
+      artwork: [96, 128, 192, 256, 384, 512].map((s) => ({
+        src: artURL(t.id), sizes: `${s}x${s}`, type: "image/jpeg",
+      })),
+    });
+    navigator.mediaSession.setActionHandler("play", () => toggle());
+    navigator.mediaSession.setActionHandler("pause", () => toggle());
+    navigator.mediaSession.setActionHandler("nexttrack", () => next());
+    navigator.mediaSession.setActionHandler("previoustrack", () => prev());
+    navigator.mediaSession.setActionHandler("seekto", (e) => {
+      if (e.seekTime != null) { audio.currentTime = e.seekTime; renderProgress(); }
+    });
+  } catch {}
+}
+
+function syncSessionState() {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
+    const d = audio.duration;
+    if (d && isFinite(d)) {
+      navigator.mediaSession.setPositionState({
+        duration: d, position: Math.min(audio.currentTime, d), playbackRate: 1,
+      });
+    }
+  } catch {}
+}
+
+/* ═══ lecture ══════════════════════════════════════════════ */
+function buildQueue(startId) {
+  let ids = playable().map((t) => t.id);
+  if (shuffle) {
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    if (startId) { ids = ids.filter((i) => i !== startId); ids.unshift(startId); }
+  }
+  queue = ids;
+  qi = startId ? ids.indexOf(startId) : 0;
+}
+
+async function loadInto(id) {
+  if (objectURL) { URL.revokeObjectURL(objectURL); objectURL = null; }
+  countedId = null;
+  const src = await srcFor(id);
+  if (src.startsWith("blob:")) objectURL = src;
+  audio.src = src;
+}
+
+/* Compteur d'écoutes. On ne compte qu'au bout de 20 s de lecture réelle
+   (ou la moitié du titre s'il est plus court) : enchaîner dix titres en
+   les sautant ne doit pas les compter comme dix écoutes. */
+let countedId = null;
+
+function countPlay() {
+  const id = queue[qi];
+  if (!id || id === countedId) return;
+  const t = byId(id);
+  if (!t || t.status !== "ready") return;
+  if (audio.currentTime < Math.min(20, (t.duration || 40) / 2)) return;
+
+  countedId = id;
+  // Incrément local immédiat : l'affichage ne dépend pas de l'aller-retour.
+  t.plays = (t.plays || 0) + 1;
+  renderList();
+  api(`/api/tracks/${id}/play`, { method: "POST" }).catch(() => {});
+}
+
+async function play(id) {
+  if (id) {
+    if (!queue.includes(id)) buildQueue(id);
+    else qi = queue.indexOf(id);
+    await loadInto(id);
+  } else if (qi < 0 && queue.length) {
+    qi = 0;
+    await loadInto(queue[0]);
+  }
+  const t = byId(queue[qi]);
+  if (!t) return;
+  updateMediaSession(t);
+  try {
+    await audio.play();
+  } catch (e) {
+    toast(navigator.onLine ? "Playback failed" : "Track not available offline");
+  }
+  renderNow(); renderList(); syncSessionState();
+}
+
+function toggle() {
+  if (audio.paused) {
+    if (qi < 0) { startAll(false); return; }
+    play();
+  } else {
+    audio.pause();
+  }
+}
+
+async function next(auto) {
+  if (!queue.length) return;
+  if (auto && REP[repeat] === "one") { audio.currentTime = 0; await play(); return; }
+  if (qi >= queue.length - 1) {
+    if (REP[repeat] === "all" || !auto) qi = 0;
+    else { audio.pause(); audio.currentTime = 0; renderNow(); renderList(); return; }
+  } else qi++;
+  await loadInto(queue[qi]);
+  await play();
+}
+
+async function prev() {
+  if (!queue.length) return;
+  if (audio.currentTime > 4) { audio.currentTime = 0; renderProgress(); return; }
+  qi = qi <= 0 ? queue.length - 1 : qi - 1;
+  await loadInto(queue[qi]);
+  await play();
+}
+
+function startAll(rnd) {
+  if (!playable().length) { toast("No track ready"); return; }
+  shuffle = rnd;
+  buildQueue();
+  play(queue[0]);
+  if (rnd) toast("Shuffling");
+}
+
+audio.addEventListener("timeupdate", () => { renderProgress(); countPlay(); });
+audio.addEventListener("durationchange", () => { renderProgress(); syncSessionState(); });
+audio.addEventListener("ended", () => next(true));
+audio.addEventListener("play", () => { renderNow(); renderList(); syncSessionState(); });
+audio.addEventListener("pause", () => { renderNow(); renderList(); syncSessionState(); });
+audio.addEventListener("error", () => {
+  if (audio.src) toast("This track could not be played");
+});
+
+/* ═══ évènements : liste ═══════════════════════════════════ */
+$("#list").addEventListener("click", (e) => {
+  const m = e.target.closest("[data-menu]");
+  if (m) { openMenu(m.dataset.menu); return; }
+  const r = e.target.closest(".row");
+  if (!r) return;
+  const t = byId(r.dataset.id);
+  if (!t) return;
+  if (t.status === "error") { openMenu(t.id); return; }
+  if (t.status !== "ready") { toast(t.stage || "Downloading…"); return; }
+  if (t.id === queue[qi]) toggle(); else play(t.id);
+});
+
+$("#q").addEventListener("input", () => {
+  $("#searchWrap").classList.toggle("has", !!$("#q").value);
+  renderList();
+});
+$("#qclr").addEventListener("click", () => {
+  $("#q").value = ""; $("#searchWrap").classList.remove("has"); renderList();
+});
+
+$("#playAll").addEventListener("click", () => startAll(false));
+$("#shufAll").addEventListener("click", () => startAll(true));
+$("#dlAll").addEventListener("click", () => downloadAll(false));
+
+$("#autoDl").addEventListener("click", () => {
+  autoDl = !autoDl;
+  localStorage.setItem("dmzs_auto", autoDl ? "1" : "0");
+  renderAuto();
+  if (autoDl) { toast("Auto-download on"); autoSweep(); }
+  else toast("Auto-download off");
+});
+
+// Un rechargement en plein téléchargement groupé perdrait les titres restants
+// sans prévenir : Safari affiche la demande de confirmation.
+addEventListener("beforeunload", (e) => {
+  if (bulk.on) { e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ═══ évènements : lecteur ═════════════════════════════════ */
+const openNP = () => { if (queue.length) $("#np").classList.add("up"); };
+$("#mPlay").addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
+$("#mNext").addEventListener("click", (e) => { e.stopPropagation(); next(); });
+$("#mArt").addEventListener("click", openNP);
+$("#mOpen").addEventListener("click", openNP);
+$("#npClose").addEventListener("click", () => $("#np").classList.remove("up"));
+$("#npplay").addEventListener("click", () => toggle());
+$("#npNext").addEventListener("click", () => next());
+$("#npPrev").addEventListener("click", () => prev());
+$("#npQueue").addEventListener("click", () => toast(`${Math.max(0, queue.length - qi - 1)} up next`));
+
+$("#npShuf").addEventListener("click", () => {
+  shuffle = !shuffle;
+  const cur = queue[qi];
+  buildQueue(cur);
+  renderNow();
+  toast(shuffle ? "Shuffle on" : "Shuffle off");
+});
+$("#npRep").addEventListener("click", () => {
+  repeat = (repeat + 1) % 3;
+  renderNow();
+  toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
+});
+$("#npDl").addEventListener("click", () => {
+  const t = byId(queue[qi]);
+  if (t) toggleOffline(t.id);
+});
+
+/* scrubber */
+const scrub = $("#scrub");
+function seek(e) {
+  const t = byId(queue[qi]);
+  if (!t) return;
+  const dur = audio.duration && isFinite(audio.duration) ? audio.duration : t.duration || 0;
+  if (!dur) return;
+  const b = scrub.querySelector(".bar").getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - b.left;
+  audio.currentTime = Math.max(0, Math.min(1, x / b.width)) * dur;
+  renderProgress();
+}
+scrub.addEventListener("pointerdown", (e) => { scrub.setPointerCapture(e.pointerId); seek(e); });
+scrub.addEventListener("pointermove", (e) => { if (scrub.hasPointerCapture(e.pointerId)) seek(e); });
+
+/* glisser vers le bas pour refermer */
+let dy = 0, y0 = null;
+$("#np").addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+$("#np").addEventListener("touchmove", (e) => {
+  if (y0 === null || e.target.closest("#scrub, .transport")) return;
+  dy = Math.max(0, e.touches[0].clientY - y0);
+  if (dy > 0) $("#np").style.transform = `translateY(${dy}px)`;
+}, { passive: true });
+$("#np").addEventListener("touchend", () => {
+  $("#np").style.transform = "";
+  if (dy > 95) $("#np").classList.remove("up");
+  y0 = null;
+});
+
+/* ═══ feuilles ═════════════════════════════════════════════ */
+const openSheet = (s) => { $("#scrim").classList.add("up"); $(s).classList.add("up"); };
+function closeSheets() {
+  $("#scrim").classList.remove("up");
+  document.querySelectorAll(".sheet").forEach((s) => s.classList.remove("up"));
+}
+$("#scrim").addEventListener("click", closeSheets);
+
+/* — ajout — */
+let adding = false;
+$("#addBtn").addEventListener("click", () => {
+  $("#url").value = "";
+  $("#addErr").classList.remove("show");
+  $("#addCta").disabled = true;
+  $("#addCta").innerHTML = "Add";
+  openSheet("#addSheet");
+  setTimeout(() => $("#url").focus(), 330);
+});
+$("#url").addEventListener("input", () => {
+  $("#addCta").disabled = !$("#url").value.trim();
+  $("#addErr").classList.remove("show");
+});
+$("#pasteBtn").addEventListener("click", async () => {
+  try {
+    const txt = await navigator.clipboard.readText();
+    if (txt) { $("#url").value = txt.trim(); $("#addCta").disabled = false; }
+  } catch { toast("Allow clipboard access, or paste manually"); }
+});
+
+$("#addCta").addEventListener("click", async () => {
+  const url = $("#url").value.trim();
+  if (!url || adding) return;
+  adding = true;
+  $("#addCta").disabled = true;
+  $("#addCta").innerHTML = `<span class="spin"></span>Adding…`;
+  $("#addErr").classList.remove("show");
+  try {
+    const res = await api("/api/tracks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    closeSheets();
+    toast(data.duplicate ? "Already in your library" : "Download started");
+    load();
+  } catch (e) {
+    $("#addErr").textContent = e.message;
+    $("#addErr").classList.add("show");
+    $("#addCta").disabled = false;
+  } finally {
+    adding = false;
+    $("#addCta").innerHTML = "Add";
+  }
+});
+
+/* — menu contextuel — */
+let menuId = null;
+function openMenu(id) {
+  const t = byId(id);
+  if (!t) return;
+  menuId = id;
+  const ready = t.status === "ready";
+  $("#mnTtl").textContent = t.title;
+  $("#mnSub").textContent = ready
+    ? `${t.artist || "—"} · ${mmss(t.duration)} · ${t.codec ? t.codec.toUpperCase() + " " : ""}${t.bitrate ? t.bitrate + " kb/s · " : ""}${fmtSize(t.size)}`
+    : t.status === "error" ? (t.error || "Failed") : (t.stage || "Working…");
+  $("#mnDlTxt").textContent = offline.has(id) ? "Remove from device" : "Download to device";
+  $("#mnPlay").hidden = !ready;
+  $("#mnNext").hidden = !ready;
+  $("#mnDl").hidden = !ready;
+  $("#mnRetry").hidden = t.status !== "error";
+  openSheet("#menuSheet");
+}
+
+async function toggleOffline(id) {
+  const has = offline.has(id);
+  try {
+    if (has) { await dropOffline(id); toast("Removed from device"); }
+    else { toast("Downloading…"); await saveOffline(id); toast("Available offline"); }
+  } catch {
+    toast("Download failed");
+  }
+  renderList(); renderNow();
+}
+
+$("#menuSheet").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-a]");
+  if (!b || !menuId) return;
+  const id = menuId;
+  const action = b.dataset.a;
+  closeSheets();
+
+  if (action === "play") { play(id); return; }
+  if (action === "next") {
+    if (qi >= 0) { queue.splice(qi + 1, 0, id); toast("Added to queue"); }
+    else toast("Start a track first");
+    return;
+  }
+  if (action === "dl") { toggleOffline(id); return; }
+  if (action === "retry") {
+    await api("/api/tracks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${id}` }),
+    }).catch(() => {});
+    toast("Retrying");
+    load();
+    return;
+  }
+  if (action === "del") {
+    if (queue[qi] === id) { audio.pause(); audio.removeAttribute("src"); qi = -1; queue = []; $("#mini").classList.remove("up"); }
+    await dropOffline(id).catch(() => {});
+    await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => {});
+    tracks = tracks.filter((t) => t.id !== id);
+    queue = queue.filter((x) => x !== id);
+    toast("Deleted");
+    renderList(); renderNow();
+  }
+});
+
+/* ═══ init ═════════════════════════════════════════════════ */
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") load();
+});
+
+(async function init() {
+  // Demande un stockage persistant : sur une app épinglée à l'écran d'accueil,
+  // iOS l'accorde sans afficher de question.
+  try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
+
+  renderAuto();
+  await refreshOffline();
+  await load();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

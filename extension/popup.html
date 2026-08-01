@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#09090b; --elev:#141417; --elev2:#1d1d21;
+  --line:rgba(255,255,255,.09); --t1:#f4f4f5; --t2:#8b8b93; --t3:#56565e;
+  --acc:#f0a04b; --red:#f2615c; --green:#5fd08a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  width:320px;background:var(--bg);color:var(--t1);padding:14px;
+  font:400 13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+h1{font-size:14px;font-weight:600;letter-spacing:-.01em;margin-bottom:2px}
+p{color:var(--t2);font-size:12.5px}
+.hide{display:none}
+
+.card{background:var(--elev);border:1px solid var(--line);border-radius:8px;padding:10px;margin:12px 0}
+.ttl{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{font-size:11.5px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+input{
+  width:100%;height:38px;padding:0 10px;background:#0e0e11;color:var(--t1);
+  border:1px solid var(--line);border-radius:7px;font:inherit;font-size:12.5px;outline:0;
+}
+input:focus{border-color:rgba(240,160,75,.5)}
+
+button{
+  width:100%;height:38px;margin-top:9px;border:0;border-radius:7px;
+  background:var(--acc);color:#1a1206;font:inherit;font-weight:600;cursor:pointer;
+}
+button:disabled{opacity:.45;cursor:default}
+button.ghost{background:var(--elev2);color:var(--t2);font-weight:500;height:30px;font-size:12px}
+
+.msg{margin-top:10px;font-size:12px;line-height:1.4;display:none}
+.msg.show{display:block}
+.msg.ok{color:var(--green)}
+.msg.err{color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- Première utilisation -->
+<section id="setup" class="hide">
+  <h1>Set up</h1>
+  <p>Paste your activation link — the one from <code>secrets.mjs</code>. The server address is read from it.</p>
+  <div class="card" style="padding:0;background:none;border:0;margin:12px 0 0">
+    <input id="key" type="text" placeholder="https://music.example.com/auth?k=…" autocomplete="off" spellcheck="false">
+  </div>
+  <button id="save">Connect</button>
+  <div id="setupMsg" class="msg"></div>
+</section>
+
+<!-- Utilisation normale -->
+<section id="main" class="hide">
+  <h1>Add to Music</h1>
+  <div class="card">
+    <div class="ttl" id="tabTitle">—</div>
+    <div class="sub" id="tabUrl">—</div>
+  </div>
+  <button id="add">Add this track</button>
+  <div id="mainMsg" class="msg"></div>
+  <button id="reset" class="ghost">Change activation link</button>
+</section>
+
+<script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# dépendances
+node_modules/
+downloader/.venv/
+
+# secrets — ne doivent JAMAIS partir dans un dépôt
+.dev.vars
+.dev.vars.*
+.env
+downloader/.env
+cookies.txt
+
+# artefacts
+.wrangler/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+Thumbs.db

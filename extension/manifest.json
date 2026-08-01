@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "dmzs-music",
+  "version": "1.0.0",
+  "description": "Send the YouTube track you are watching straight to your music library.",
+  "permissions": ["storage", "activeTab", "contextMenus"],
+  "host_permissions": ["https://music.example.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Add to Music",
+    "default_icon": { "128": "icon-192.png" }
+  },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": { "128": "icon-192.png" }
+}

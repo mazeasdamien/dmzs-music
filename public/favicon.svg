@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Même marque que icon-512.png, mais resserrée : à 16 px, la marge
+       généreuse de l'icône d'écran d'accueil réduirait les barres à une bouillie. -->
+  <rect width="32" height="32" rx="7" fill="#09090b"/>
+  <g fill="#f0a04b">
+    <rect x="4.5" y="12.5" width="4" height="7"  rx="2"/>
+    <rect x="11"  y="8.5"  width="4" height="15" rx="2"/>
+    <rect x="17.5" y="4.5" width="4" height="23" rx="2"/>
+    <rect x="24"  y="10.5" width="4" height="11" rx="2"/>
+  </g>
+</svg>
