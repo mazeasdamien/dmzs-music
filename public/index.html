@@ -207,8 +207,10 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .npmeta{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:18px}
 .npmeta h2{font-size:20px;font-weight:600;letter-spacing:-.017em;line-height:1.25}
 .npmeta p{font-size:15px;color:rgba(255,255,255,.6);margin-top:3px}
-.dlbtn{width:32px;height:32px;border-radius:50%;flex:none;margin-bottom:3px;background:rgba(255,255,255,.1);color:var(--t1)}
+.npbtns{display:flex;align-items:center;gap:9px;flex:none}
+.dlbtn{width:32px;height:32px;border-radius:50%;flex:none;margin-bottom:3px;background:rgba(255,255,255,.1);color:#fff}
 .dlbtn.on{background:var(--acc);color:var(--on-acc)}
+#npFav.on{background:var(--acc);color:var(--on-acc)}
 .dlbtn.wait{opacity:.5}
 
 .scrub{flex:none;margin-top:20px;padding:9px 0;cursor:pointer}
@@ -350,9 +352,12 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   <div class="npart"><div class="box" id="npArt"></div></div>
   <div class="npmeta">
     <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
+    <div class="npbtns">
+    <button class="dlbtn" id="npFav" aria-label="Favourite"></button>
     <button class="dlbtn" id="npDl" aria-label="Offline">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
     </button>
+    </div>
   </div>
   <div class="scrub" id="scrub">
     <div class="bar"><span id="npFill"></span></div>
@@ -396,9 +401,6 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   <div class="sh-s tr" id="mnSub" style="margin-bottom:10px"></div>
   <button class="mi" data-a="play" id="mnPlay">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Play now
-  </button>
-  <button class="mi" data-a="next" id="mnNext">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 12h11M4 18h7M18 9v9M21.5 13.5 18 9l-3.5 4.5"/></svg>Play next
   </button>
   <button class="mi" data-a="fav" id="mnFav">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>
@@ -873,7 +875,9 @@ function renderNow() {
   $("#npArtist").textContent = t.artist || "—";
   $("#npbg").style.backgroundImage = `url(${artURL(t.id)})`;
   $("#npDl").classList.toggle("on", offline.has(t.id));
-  $("#npSrc").textContent = shuffle ? "Shuffle · Library" : "Library";
+  $("#npFav").innerHTML = t.fav ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>` : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>`;
+  $("#npFav").classList.toggle("on", Boolean(t.fav));
+  $("#npFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
 
   const playing = !audio.paused;
   $("#mPlay").innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
@@ -881,6 +885,12 @@ function renderNow() {
   $("#np").classList.toggle("playing", playing);
   $("#npShuf").classList.toggle("on", shuffle);
   $("#npRep").classList.toggle("on", repeat > 0);
+  $("#npRep").setAttribute(
+    "aria-label",
+    ["Repeat off", "Repeat the queue", "Repeat this track"][repeat]
+  );
+  $("#npSrc").textContent =
+    repeat === 2 ? "Repeating this track" : shuffle ? "Shuffle · Library" : "Library";
   renderProgress();
 }
 
@@ -1147,6 +1157,11 @@ $("#npRep").addEventListener("click", () => {
   setRepeat((repeat + 1) % 3);
   toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
 });
+$("#npFav").addEventListener("click", () => {
+  const t = byId(queue[qi]);
+  if (t) toggleFav(t.id);
+});
+
 $("#npDl").addEventListener("click", () => {
   const t = byId(queue[qi]);
   if (t) toggleOffline(t.id);
@@ -1252,7 +1267,6 @@ function openMenu(id) {
   $("#mnDlTxt").textContent = offline.has(id) ? "Remove from device" : "Download to device";
   $("#mnFavTxt").textContent = t.fav ? "Remove from favourites" : "Add to favourites";
   $("#mnPlay").hidden = !ready;
-  $("#mnNext").hidden = !ready;
   $("#mnDl").hidden = !ready;
   $("#mnRetry").hidden = t.status !== "error";
   openSheet("#menuSheet");
@@ -1277,11 +1291,6 @@ $("#menuSheet").addEventListener("click", async (e) => {
   closeSheets();
 
   if (action === "play") { play(id); return; }
-  if (action === "next") {
-    if (qi >= 0) { queue.splice(qi + 1, 0, id); toast("Added to queue"); }
-    else toast("Start a track first");
-    return;
-  }
   if (action === "fav") { toggleFav(id); return; }
   if (action === "dl") { toggleOffline(id); return; }
   if (action === "retry") {
