@@ -11,17 +11,17 @@ $envFile = Join-Path $root ".env"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $python)) {
-    Write-Host "Environnement Python absent. Creation..." -ForegroundColor Yellow
+    Write-Host "Python environment missing. Creating..." -ForegroundColor Yellow
     py -3 -m venv (Join-Path $root ".venv")
     & $python -m pip install --quiet --upgrade pip "yt-dlp[default]"
 }
 
 if (-not (Test-Path $envFile)) {
-    Write-Host "Premier lancement. Colle ton WORKER_TOKEN"
-    Write-Host "(celui envoye avec 'npx wrangler secret put WORKER_TOKEN')." -ForegroundColor DarkGray
+    Write-Host "First run. Paste your WORKER_TOKEN"
+    Write-Host "(the one you set with 'npx wrangler secret put WORKER_TOKEN')." -ForegroundColor DarkGray
     $token = Read-Host "WORKER_TOKEN"
     Set-Content -Path $envFile -Value "WORKER_TOKEN=$token" -Encoding ascii
-    Write-Host "Enregistre dans downloader\.env - ignore par git." -ForegroundColor DarkGray
+    Write-Host "Saved to downloader\.env - git ignored." -ForegroundColor DarkGray
 }
 
 foreach ($line in Get-Content $envFile) {

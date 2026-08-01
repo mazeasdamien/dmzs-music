@@ -211,6 +211,12 @@ No published port: the container only makes outbound requests. You should see:
 [poll] queue empty, waiting
 ```
 
+Queued tracks then drain back to back:
+
+<p align="center">
+  <img src="docs/downloader.png" alt="Downloader draining the queue" width="80%">
+</p>
+
 The image builds as-is on a Raspberry Pi (ARM64).
 
 ---

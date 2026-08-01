@@ -60,7 +60,7 @@ USER_AGENT = "dmzs-music-downloader/1.0"
 
 def call_worker(path: str, body: bytes, headers: dict | None = None) -> bool:
     if not APP_URL or not TOKEN:
-        print(f"[worker] APP_URL/WORKER_TOKEN absents, appel {path} ignoré")
+        print(f"[worker] APP_URL/WORKER_TOKEN missing, skipping {path}")
         return False
     req = urllib.request.Request(
         f"{APP_URL}{path}",
@@ -215,7 +215,7 @@ def square_thumbnail(url: str, workdir: str) -> str | None:
              "-q:v", "3", out])
         return out
     except Exception as e:  # noqa: BLE001
-        print(f"[art] échec : {e}")
+        print(f"[art] failed: {e}")
         return None
 
 
@@ -225,7 +225,7 @@ def process(job: dict) -> None:
 
     track_id = job["id"]
     url = job["url"]
-    print(f"[job] {track_id} — début")
+    print(f"[job] {track_id} — start")
 
     with tempfile.TemporaryDirectory() as workdir:
         last_report = [0.0]
@@ -342,7 +342,7 @@ def process(job: dict) -> None:
         if not ok:
             raise RuntimeError("The Worker rejected the final file")
 
-    print(f"[job] {track_id} — terminé ({len(payload)} octets, {ext})")
+    print(f"[job] {track_id} — done ({len(payload)} bytes, {ext})")
 
 
 def handle(job: dict) -> None:
@@ -365,12 +365,12 @@ def handle(job: dict) -> None:
 def main() -> None:
     if not APP_URL or not TOKEN:
         raise SystemExit(
-            "APP_URL et WORKER_TOKEN sont obligatoires.\n"
-            "  Windows, sans Docker : npm run dl\n"
-            "  Docker               : docker run -e APP_URL=... -e WORKER_TOKEN=... dmzs-dl"
+            "APP_URL and WORKER_TOKEN are required.\n"
+            "  Windows, no Docker  : npm run dl\n"
+            "  Docker              : docker run -e APP_URL=... -e WORKER_TOKEN=... dmzs-dl"
         )
 
-    print(f"[boot] sondage de {APP_URL} toutes les {POLL_INTERVAL:.0f} s")
+    print(f"[boot] polling {APP_URL} every {POLL_INTERVAL:.0f} s")
     errors = 0
     idle = False
 
@@ -383,13 +383,13 @@ def main() -> None:
             # Worker injoignable (coupure réseau, déploiement en cours) : on
             # recule au lieu de marteler, jusqu'à 5 minutes entre deux essais.
             delay = min(POLL_INTERVAL * 2 ** min(errors, 4), 300)
-            print(f"[poll] injoignable ({e}) — nouvel essai dans {delay:.0f} s")
+            print(f"[poll] unreachable ({e}) — retrying in {delay:.0f} s")
             time.sleep(delay)
             continue
 
         if job:
             idle = False
-            print(f"[poll] job reçu : {job['id']}")
+            print(f"[poll] job received: {job['id']}")
             handle(job)
             # On repart aussitôt : une file de plusieurs titres se vide d'affilée
             # sans attendre un intervalle entre chaque.
@@ -397,7 +397,7 @@ def main() -> None:
 
         if not idle:
             # Une seule ligne au passage à vide : pas de log toutes les 30 s.
-            print("[poll] file vide, en attente")
+            print("[poll] queue empty, waiting")
             idle = True
         time.sleep(POLL_INTERVAL)
 
@@ -406,4 +406,4 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[boot] arrêt")
+        print("\n[boot] stopped")
