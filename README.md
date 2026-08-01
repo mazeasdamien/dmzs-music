@@ -227,10 +227,15 @@ Adds the YouTube track you are watching without copying links around.
 Three ways to add a track:
 
 - The **"Add to Music" button** injected into YouTube's action row, next to
-  *Subscribe*
+  *Subscribe*. It turns green once the track is queued.
 - The **extension icon** → *Add this track*
 - **Right-click → Add to Music**, on the page or on any YouTube link. A badge
   confirms: `✓` added, `=` already there, `!` failed.
+
+<p align="center">
+  <img src="docs/extension-added.png" alt="The button after adding a track" width="58%">
+  <img src="docs/extension-popup.png" alt="Extension popup" width="34%">
+</p>
 
 Pasting the whole activation link rather than just the key also configures the
 server address.
