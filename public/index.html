@@ -107,8 +107,12 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    horizontal axis for the star gesture. Without it the list would try to
    scroll and the swipe would never get its move events. */
 .row{display:flex;align-items:center;gap:11px;height:var(--row);padding:0 16px;position:relative;transition:background .1s;touch-action:pan-y}
-.row.sw-on{background:color-mix(in srgb, var(--acc) 13%, transparent)}
-.row.sw-off{background:var(--press)}
+/* Both directions get the same weight of feedback. The remove side used to
+   be var(--press), white at 4.5%, which read as nothing happening at all. */
+.row.sw-on{background:color-mix(in srgb, var(--acc) 20%, transparent)}
+.row.sw-off{background:color-mix(in srgb, var(--red) 20%, transparent)}
+.row.sw-on .ttl{color:var(--acc)}
+.row.sw-off .ttl{color:var(--red)}
 .row:active{background:var(--press)}
 .row::after{content:"";position:absolute;left:73px;right:0;bottom:0;height:1px;background:var(--line)}
 .row:last-child::after{display:none}
