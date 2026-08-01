@@ -172,6 +172,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #mini .art2{font-size:11.5px;margin-top:1px}
 .mctl{display:flex;align-items:center;gap:2px;flex:none}
 .mbtn{width:38px;height:44px;color:var(--t1)}
+/* Starring from the bar matters on desktop, where there is no row to swipe. */
+#mFav{color:var(--t3)}
+#mFav.on{color:var(--acc)}
 .mbtn:active{opacity:.5}
 #mprog{position:absolute;left:0;top:0;height:2px;background:var(--acc);width:0;transition:width .25s linear}
 
@@ -324,6 +327,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   <div class="art" id="mArt"></div>
   <div class="info" id="mOpen"><div class="ttl tr" id="mTtl">—</div><div class="art2 tr" id="mArtist">—</div></div>
   <div class="mctl">
+    <button class="mbtn" id="mFav" aria-label="Favourite"></button>
     <button class="mbtn" id="mPlay" aria-label="Play"></button>
     <button class="mbtn" id="mNext" aria-label="Next">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.2v13.6a1 1 0 0 0 1.54.84l10.2-6.8a1 1 0 0 0 0-1.68L6.54 4.36A1 1 0 0 0 5 5.2z"/><rect x="17.6" y="4.6" width="2.4" height="14.8" rx="1.2"/></svg>
@@ -825,6 +829,10 @@ function renderList() {
    npArtId also guards against a fast skip: if the track changed again while an
    image was in flight, the late arrival is dropped rather than painted over
    whatever is now playing. */
+/* One definition, used by the mini bar and the full-screen player. */
+const HEART_FILLED = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>`;
+const HEART_OUTLINE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>`;
+
 let npArtId = null;
 
 function setNpArt(t) {
@@ -870,7 +878,10 @@ function renderNow() {
   $("#npArtist").textContent = t.artist || "—";
   $("#npbg").style.backgroundImage = `url(${artURL(t.id)})`;
   $("#npState").textContent = offline.has(t.id) ? "On this device" : "Streaming";
-  $("#npFav").innerHTML = t.fav ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>` : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>`;
+  $("#mFav").innerHTML = t.fav ? HEART_FILLED : HEART_OUTLINE;
+  $("#mFav").classList.toggle("on", Boolean(t.fav));
+  $("#mFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
+  $("#npFav").innerHTML = t.fav ? HEART_FILLED : HEART_OUTLINE;
   $("#npFav").classList.toggle("on", Boolean(t.fav));
   $("#npFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
 
@@ -1148,6 +1159,13 @@ $("#npRep").addEventListener("click", () => {
   setRepeat((repeat + 1) % 3);
   toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
 });
+$("#mFav").addEventListener("click", (e) => {
+  // The bar itself opens the full-screen player, so the heart keeps its tap.
+  e.stopPropagation();
+  const t = byId(queue[qi]);
+  if (t) toggleFav(t.id);
+});
+
 $("#npFav").addEventListener("click", () => {
   const t = byId(queue[qi]);
   if (t) toggleFav(t.id);
@@ -1264,10 +1282,20 @@ $("#np").addEventListener("touchend", () => {
     const ry = e.touches[0].clientY - y0;
 
     if (!axis) {
-      if (Math.abs(rx) < 10 && Math.abs(ry) < 10) return;
-      if (Math.abs(ry) >= Math.abs(rx)) { reset(); return; }
+      // The browser keeps vertical panning for itself (touch-action: pan-y),
+      // and nothing said here can take it back once a gesture is under way.
+      // So the test is deliberately lopsided: a swipe only counts as
+      // horizontal when it is clearly horizontal. Anything ambiguous becomes a
+      // scroll and never a swipe, which is what stops the row sliding sideways
+      // while the list scrolls underneath it.
+      if (Math.abs(ry) > 8) { reset(); return; }
+      if (Math.abs(rx) < 14) return;
+      if (Math.abs(rx) < Math.abs(ry) * 1.8) { reset(); return; }
       axis = "x";
     }
+
+    // Locked horizontal: a late vertical wander is ignored rather than
+    // fighting the transform.
 
     dx = rx;
     // Damped: the row follows the thumb without running away from it.
