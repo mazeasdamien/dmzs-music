@@ -13,15 +13,37 @@ and plays from a PWA pinned to your iPhone home screen, online or offline.
 **Licence: [MIT](LICENSE).** Free to use, copy, modify and redistribute, as
 long as the copyright notice stays in place. No warranty of any kind.
 
-**Legal.** yt-dlp is legal software: the DMCA takedown filed by the RIAA in 2020
-was reversed by GitHub after the EFF intervened. Downloading from YouTube does
-however violate its terms of service, and in France the private-copy exception
-was narrowed by the CJEU ruling of 16 April 2026 concerning offline downloads
-from streaming platforms.
+**Legal. Read this before using it: what this project does is not clearly
+lawful, and in the EU there is binding case law against it.**
+
+Three separate layers, worth keeping apart.
+
+*The tool itself is lawful.* yt-dlp is not illegal software. The DMCA takedown
+filed by the RIAA against youtube-dl in 2020 was reversed by GitHub after the
+EFF intervened.
+
+*Downloading breaches YouTube's terms of service.* That is contractual, not
+criminal. The realistic consequence is account or access termination.
+
+*Copyright is the real problem.* Most EU countries, France included, have a
+private-copying exception, but it does **not** cover circumventing a
+technological protection measure (Article 6 of the InfoSoc Directive; Article
+L331-5 of the French Intellectual Property Code). In November 2024 the Hamburg
+Higher Regional Court upheld, finally and without further appeal, that
+YouTube's "rolling cipher" is an effective technological protection measure and
+that youtube-dl circumvents it. That is the most directly applicable European
+precedent for what this project does.
+
+For the avoidance of doubt: the CJEU ruling of 16 April 2026 (C-496/24,
+*Stichting de Thuiskopie v HP Nederland*) is sometimes cited here, but it
+concerns something else. It holds that DRM-locked offline downloads offered by
+streaming services themselves are not private copies for private-copying levy
+purposes. It does not address copies a user makes with their own tool.
 
 This project is published for personal and educational use. You are responsible
-for what you do with it, and for the rights attached to the content you
-download. This is not legal advice.
+for what you do with it and for the rights attached to the content you
+download. This is not legal advice; for anything beyond strictly personal use,
+talk to a lawyer.
 
 ---
 
