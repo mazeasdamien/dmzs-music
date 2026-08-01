@@ -121,15 +121,36 @@ BRACKETS = re.compile(r"\s*[\(\[\{][^\(\)\[\]\{\}]*[\)\]\}]")
 
 DASHES = re.compile(r"\s+[-–—]\s+")
 
+# Removing brackets does nothing for the noise uploaders hang off the end after
+# a pipe or a dash: "| Vevo", "| A COLORS SHOW", "- Official Video". The list is
+# deliberately closed rather than a catch-all, because a trailing segment is
+# just as often part of the name ("- Extended Mix", "| Sped Up").
+TAIL_JUNK = re.compile(
+    r"""\s*[|·–—-]\s*(?:
+        vevo | ncs | a\s*colors\s*show | colors
+      | official\s*(?:music\s*)?(?:video|audio|visuali[sz]er)?
+      | lyrics?(?:\s*video)? | visuali[sz]er
+      | copyright\s*free\s*music | free\s*(?:music|download)
+      | clip\s*officiel | audio\s*officiel | vid[ée]o\s*officielle
+      | future\s*house | house\s*music
+    )\s*$""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
 
 def strip_brackets(text: str) -> str:
-    """Removes bracketed groups, innermost first so nesting unwinds."""
+    """Removes bracketed groups and trailing uploader noise."""
     prev = None
     while prev != text:
         prev = text
         text = BRACKETS.sub("", text)
     # An unclosed bracket would otherwise survive as a stray opening character.
     text = re.sub(r"\s*[\(\[\{].*$", "", text)
+    # Repeated, since these chain: "Feel Good | Future House | NCS".
+    prev = None
+    while prev != text:
+        prev = text
+        text = TAIL_JUNK.sub("", text)
     return text.strip(" -–—·|")
 
 
