@@ -13,15 +13,51 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/icon-192.png" type="image/png">
 <title>Music</title>
+<script>
+/* Runs before the stylesheet is applied, so the very first paint is already in
+   the right theme. Doing this from the main script at the bottom of the page
+   would show a dark flash to anyone who picked light. */
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem("dmzs_theme"); } catch (e) {}
+  var theme = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.dataset.theme = theme;
+})();
+</script>
 <style>
 /* ─── design tokens ──────────────────────────────────────── */
+/* Dark is the default; [data-theme="light"] on <html> swaps the palette.
+   The theme is resolved by an inline script in <head> so the first paint is
+   already correct: applying it from the main script would flash dark first.
+
+   The now-playing view is deliberately left out of this. It sits on a blurred
+   blow-up of the artwork, which is dark whatever the theme, so its white text
+   stays white in both. */
 :root{
   --bg:#09090b; --elev:#141417; --elev2:#1d1d21;
   --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.13);
   --t1:#f4f4f5; --t2:#8b8b93; --t3:#56565e;
-  --acc:#f0a04b; --red:#f2615c;
+  --acc:#f0a04b; --red:#f2615c; --on-acc:#1a1206;
+  --press:rgba(255,255,255,.045); --press2:#2a2a30;
+  --track:rgba(255,255,255,.09); --grab:rgba(255,255,255,.2);
+  --glass:rgba(24,24,28,.97); --sheet:#17171b; --input:#0e0e11;
+  --toast-bg:rgba(240,240,245,.96); --toast-fg:#101014;
+  --shadow:rgba(0,0,0,.4);
   --r:7px; --row:62px; --mini:60px;
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
+}
+
+:root[data-theme="light"]{
+  --bg:#f7f7f9; --elev:#fff; --elev2:#ececf0;
+  --line:rgba(0,0,0,.075); --line-strong:rgba(0,0,0,.14);
+  --t1:#18181b; --t2:#5c5c66; --t3:#9a9aa4;
+  /* Deeper than the dark-theme amber: #f0a04b on white fails contrast. */
+  --acc:#c9781a; --red:#d1372f; --on-acc:#fff;
+  --press:rgba(0,0,0,.04); --press2:#e0e0e6;
+  --track:rgba(0,0,0,.09); --grab:rgba(0,0,0,.18);
+  --glass:rgba(255,255,255,.97); --sheet:#fff; --input:#f2f2f5;
+  --toast-bg:rgba(24,24,28,.96); --toast-fg:#f4f4f5;
+  --shadow:rgba(0,0,0,.16);
 }
 
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -44,7 +80,7 @@ header{flex:none;padding:calc(var(--sat) + 14px) 16px 0;background:var(--bg)}
 h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 .meta{font-size:12.5px;color:var(--t3);margin-top:3px}
 .iconbtn{width:33px;height:33px;border-radius:50%;flex:none;background:var(--elev2);color:var(--t1);transition:background .12s,transform .08s}
-.iconbtn:active{background:#2a2a30;transform:scale(.93)}
+.iconbtn:active{background:var(--press2);transform:scale(.93)}
 
 .actions{display:flex;gap:8px;margin:15px 0 11px}
 /* min-width:0 is load bearing: without it, "Play" and "Shuffle" refuse to
@@ -60,16 +96,20 @@ h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 .act.sq.run{color:var(--acc)}
 .act.sq .n{font-size:13px;font-variant-numeric:tabular-nums;margin-left:6px}
 
+/* A starred track shows its heart in the row, in the accent colour. */
+.favmark{color:var(--acc);display:inline-flex;flex:none}
+
 /* Play counter, hidden until the track has actually been played. */
 .plays{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--t3);flex:none}
 .plays svg{opacity:.75}
 
 /* The "Auto" switch: every new track goes to the device on its own. */
-.metarow{display:flex;align-items:center;gap:7px;margin-top:3px}
+.metarow{display:flex;align-items:center;flex-wrap:wrap;gap:5px 7px;margin-top:3px}
+.htools{display:flex;align-items:center;gap:8px;flex:none}
 .autopill{height:18px;padding:0 7px;border-radius:9px;flex:none;background:var(--elev2);
   color:var(--t3);border:1px solid var(--line);font-size:10.5px;font-weight:600;
   letter-spacing:.02em;text-transform:uppercase;transition:background .12s,color .12s}
-.autopill[aria-pressed="true"]{background:rgba(240,160,75,.16);color:var(--acc);border-color:rgba(240,160,75,.35)}
+.autopill[aria-pressed="true"],.autopill.on{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc);border-color:color-mix(in srgb,var(--acc) 35%,transparent)}
 
 .search{display:flex;align-items:center;gap:7px;height:33px;padding:0 9px;background:var(--elev);border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px}
 .search svg{color:var(--t3);flex:none}
@@ -83,7 +123,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #pad{height:calc(var(--mini) + var(--sab) + 18px)}
 
 .row{display:flex;align-items:center;gap:11px;height:var(--row);padding:0 16px;position:relative;transition:background .1s}
-.row:active{background:rgba(255,255,255,.045)}
+.row:active{background:var(--press)}
 .row::after{content:"";position:absolute;left:73px;right:0;bottom:0;height:1px;background:var(--line)}
 .row:last-child::after{display:none}
 
@@ -114,7 +154,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .row.busy .art2{color:var(--acc)}
 .row.err .art2{color:var(--red)}
 .pct{font-size:12.5px;color:var(--acc)}
-.rowbar{position:absolute;left:73px;right:16px;bottom:0;height:2px;background:rgba(255,255,255,.09);overflow:hidden}
+.rowbar{position:absolute;left:73px;right:16px;bottom:0;height:2px;background:var(--track);overflow:hidden}
 .rowbar i{display:block;height:100%;background:var(--acc);width:0;transition:width .35s ease-out}
 .row.busy .art{opacity:.55}
 .row.err .art{opacity:.4}
@@ -124,8 +164,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 
 #mini{
   position:fixed;left:8px;right:8px;bottom:calc(var(--sab) + 8px);
+  max-width:640px;margin-inline:auto;
   height:var(--mini);border-radius:11px;overflow:hidden;
-  background:rgba(24,24,28,.97);
+  background:var(--glass);
   -webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);
   border:1px solid var(--line-strong);
   display:flex;align-items:center;gap:10px;padding:0 9px;
@@ -167,7 +208,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .npmeta h2{font-size:20px;font-weight:600;letter-spacing:-.017em;line-height:1.25}
 .npmeta p{font-size:15px;color:rgba(255,255,255,.6);margin-top:3px}
 .dlbtn{width:32px;height:32px;border-radius:50%;flex:none;margin-bottom:3px;background:rgba(255,255,255,.1);color:var(--t1)}
-.dlbtn.on{background:var(--acc);color:#1a1206}
+.dlbtn.on{background:var(--acc);color:var(--on-acc)}
 .dlbtn.wait{opacity:.5}
 
 .scrub{flex:none;margin-top:20px;padding:9px 0;cursor:pointer}
@@ -189,13 +230,13 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 
 #scrim{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
 #scrim.up{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#17171b;border-radius:15px 15px 0 0;border-top:1px solid var(--line-strong);padding:8px 16px calc(var(--sab) + 14px);transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--sheet);border-radius:15px 15px 0 0;border-top:1px solid var(--line-strong);padding:8px 16px calc(var(--sab) + 14px);transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
 .sheet.up{transform:translateY(0)}
-.grab{width:35px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 14px}
+.grab{width:35px;height:4px;border-radius:2px;background:var(--grab);margin:0 auto 14px}
 .sh-t{font-size:16px;font-weight:600;letter-spacing:-.011em;margin-bottom:3px}
 .sh-s{font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.45}
 
-.urlbox{display:flex;align-items:center;gap:9px;height:44px;padding:0 12px;background:#0e0e11;border:1px solid var(--line-strong);border-radius:var(--r)}
+.urlbox{display:flex;align-items:center;gap:9px;height:44px;padding:0 12px;background:var(--input);border:1px solid var(--line-strong);border-radius:var(--r)}
 .urlbox input{flex:1;font-size:14.5px;min-width:0}
 .urlbox input::placeholder{color:var(--t3)}
 .paste{font-size:13px;font-weight:500;color:var(--acc);flex:none;padding:0 2px}
@@ -204,10 +245,10 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .formerr{display:none;font-size:13px;color:var(--red);margin-top:10px;line-height:1.45}
 .formerr.show{display:block}
 
-.cta{width:100%;height:46px;border-radius:var(--r);margin-top:16px;background:var(--acc);color:#1a1206;font-size:15px;font-weight:600;letter-spacing:-.006em;gap:8px;transition:opacity .12s,transform .08s}
+.cta{width:100%;height:46px;border-radius:var(--r);margin-top:16px;background:var(--acc);color:var(--on-acc);font-size:15px;font-weight:600;letter-spacing:-.006em;gap:8px;transition:opacity .12s,transform .08s}
 .cta:active{transform:scale(.99);opacity:.85}
 .cta:disabled{opacity:.28;pointer-events:none}
-.spin{width:15px;height:15px;border-radius:50%;flex:none;border:2px solid rgba(0,0,0,.2);border-top-color:#1a1206;animation:sp .65s linear infinite}
+.spin{width:15px;height:15px;border-radius:50%;flex:none;border:2px solid rgba(0,0,0,.2);border-top-color:var(--on-acc);animation:sp .65s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 
 .mi{display:flex;align-items:center;gap:13px;height:50px;font-size:15px;letter-spacing:-.008em;width:100%;justify-content:flex-start;border-bottom:1px solid var(--line)}
@@ -218,7 +259,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .mi.del svg{color:var(--red)}
 .mi[hidden]{display:none}
 
-#toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--sab) + 26px);transform:translate(-50%,14px);z-index:80;background:rgba(240,240,245,.96);color:#101014;padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px rgba(0,0,0,.4);max-width:82vw;text-align:center}
+#toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--sab) + 26px);transform:translate(-50%,14px);z-index:80;background:var(--toast-bg);color:var(--toast-fg);padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px var(--shadow);max-width:82vw;text-align:center}
 #toast.up{opacity:1;transform:translate(-50%,0)}
 
 /* ─── portrait lock ───────────────────────────────────────────
@@ -251,11 +292,17 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
         <div class="metarow">
           <span class="meta" id="hmeta">Loading…</span>
           <button class="autopill" id="autoDl" aria-pressed="false" title="Automatically download new tracks to this device">Auto</button>
+          <button class="autopill" id="sortBtn" title="Order of the library, and of playback">Recent</button>
+          <button class="autopill" id="loopBtn" title="Repeat the queue, or the current track">Loop</button>
+          <button class="autopill" id="favBtn" title="Show and play only starred tracks">Favourites</button>
         </div>
       </div>
-      <button class="iconbtn" id="addBtn" aria-label="Add">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
+      <div class="htools">
+        <button class="iconbtn" id="themeBtn" aria-label="Switch theme"></button>
+        <button class="iconbtn" id="addBtn" aria-label="Add">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
     </div>
     <div class="actions">
       <button class="act" id="playAll">
@@ -352,6 +399,10 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   </button>
   <button class="mi" data-a="next" id="mnNext">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 12h11M4 18h7M18 9v9M21.5 13.5 18 9l-3.5 4.5"/></svg>Play next
+  </button>
+  <button class="mi" data-a="fav" id="mnFav">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>
+    <span id="mnFavTxt">Add to favourites</span>
   </button>
   <button class="mi" data-a="dl" id="mnDl">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
@@ -579,6 +630,75 @@ function renderDlAll() {
    its own container, separate from Safari. */
 let autoDl = localStorage.getItem("dmzs_auto") === "1";
 
+/* ═══ theme, order, repeat ═════════════════════════════════
+   Three small per-device settings. They live in localStorage rather than in
+   D1: which theme this screen wants, and how this device likes its queue, is
+   not something the library itself should carry across devices. */
+
+const ICON_SUN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/></svg>`;
+const ICON_MOON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.4A8.4 8.4 0 0 1 10.6 4a8.4 8.4 0 1 0 9.4 9.4z"/></svg>`;
+
+const theme = () => document.documentElement.dataset.theme;
+
+function renderTheme() {
+  const light = theme() === "light";
+  // The icon shows where the button takes you, not where you are.
+  $("#themeBtn").innerHTML = light ? ICON_MOON : ICON_SUN;
+  $("#themeBtn").setAttribute("aria-label", light ? "Switch to dark" : "Switch to light");
+  // The iOS status bar sits on the shell, so it follows the shell's colour.
+  document.querySelector('meta[name="theme-color"]')
+    .setAttribute("content", light ? "#f7f7f9" : "#09090b");
+}
+
+/* Order of the library. buildQueue() reads the same list, so changing this
+   also changes what "Play" plays, and in which direction. */
+let sortMode = localStorage.getItem("dmzs_sort") === "plays" ? "plays" : "recent";
+
+function renderSort() {
+  const b = $("#sortBtn");
+  b.textContent = sortMode === "plays" ? "Most played" : "Recent";
+  b.classList.toggle("on", sortMode === "plays");
+}
+
+/* Starred tracks. Kept in D1 rather than on the device: which tracks are
+   favourites is a property of the library, not of the phone looking at it. */
+let favOnly = localStorage.getItem("dmzs_favonly") === "1";
+
+function renderFav() {
+  const b = $("#favBtn");
+  b.classList.toggle("on", favOnly);
+  b.setAttribute("aria-pressed", favOnly ? "true" : "false");
+}
+
+async function toggleFav(id) {
+  const t = byId(id);
+  if (!t) return;
+  t.fav = t.fav ? 0 : 1;
+  // Local first, so the heart answers the tap; the server catches up after.
+  saveTracks(tracks);
+  renderList();
+  renderNow();
+  toast(t.fav ? "Added to favourites" : "Removed from favourites");
+  api(`/api/tracks/${id}/fav`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fav: t.fav }),
+  }).catch(() => {});
+}
+
+function renderLoop() {
+  const b = $("#loopBtn");
+  b.textContent = REP[repeat] === "one" ? "Loop 1" : "Loop";
+  b.classList.toggle("on", repeat !== 0);
+}
+
+function setRepeat(v) {
+  repeat = v;
+  localStorage.setItem("dmzs_repeat", String(repeat));
+  renderLoop();
+  renderNow();
+}
+
 function renderAuto() {
   $("#autoDl").setAttribute("aria-pressed", autoDl ? "true" : "false");
 }
@@ -658,9 +778,22 @@ async function srcFor(id) {
 /* ═══ rendering ════════════════════════════════════════════ */
 function visible() {
   const q = $("#q").value.trim().toLowerCase();
-  const list = tracks;
-  if (!q) return list;
-  return list.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q));
+  let list = q
+    ? tracks.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q))
+    : tracks;
+
+  // Filtering here rather than at render time is what makes "play only the
+  // favourites" work: buildQueue() reads this same list.
+  if (favOnly) list = list.filter((t) => t.fav);
+
+  if (sortMode === "plays") {
+    // Copy before sorting: `tracks` holds the server order, which "Recent"
+    // depends on, and sort() would rearrange it in place.
+    list = [...list].sort(
+      (a, b) => (b.plays || 0) - (a.plays || 0) || (b.created_at || 0) - (a.created_at || 0)
+    );
+  }
+  return list;
 }
 const playable = () => visible().filter((t) => t.status === "ready");
 
@@ -689,6 +822,7 @@ function renderList() {
           <div class="art">${artHTML(t)}</div>
           <div class="info"><div class="ttl tr">${esc(t.title)}</div><div class="art2 tr">${esc(sub)}</div></div>
           <div class="right">
+            ${!busy && !err && t.fav ? `<span class="favmark" aria-label="Favourite"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg></span>` : ""}
             ${!busy && !err && t.plays ? `<span class="plays num" title="${t.plays} play${t.plays > 1 ? "s" : ""}"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>${t.plays}</span>` : ""}
             ${right}
             ${!busy && !err ? `<span class="dur num">${mmss(t.duration)}</span>` : ""}
@@ -926,6 +1060,49 @@ $("#playAll").addEventListener("click", () => startAll(false));
 $("#shufAll").addEventListener("click", () => startAll(true));
 $("#dlAll").addEventListener("click", () => downloadAll(false));
 
+$("#themeBtn").addEventListener("click", () => {
+  const next = theme() === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("dmzs_theme", next); } catch {}
+  renderTheme();
+});
+
+$("#sortBtn").addEventListener("click", () => {
+  sortMode = sortMode === "plays" ? "recent" : "plays";
+  localStorage.setItem("dmzs_sort", sortMode);
+  renderSort();
+  renderFav();
+  renderList();
+  toast(sortMode === "plays" ? "Most played first" : "Most recent first");
+});
+
+$("#favBtn").addEventListener("click", () => {
+  favOnly = !favOnly;
+  localStorage.setItem("dmzs_favonly", favOnly ? "1" : "0");
+  renderFav();
+  renderList();
+  if (favOnly && !tracks.some((t) => t.fav)) toast("No favourites yet");
+  else toast(favOnly ? "Favourites only" : "Showing everything");
+});
+
+$("#loopBtn").addEventListener("click", () => {
+  setRepeat((repeat + 1) % 3);
+  toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
+});
+
+/* Away from the tab, timeupdate is throttled while the audio keeps playing, so
+   the bar is stale on return and its width transition animates across the gap.
+   That slide is the "jump". Snap to the real position instead, then restore
+   the transition once the browser has committed it. */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  const bar = $("#mprog");
+  bar.style.transition = "none";
+  renderProgress();
+  void bar.offsetWidth;
+  requestAnimationFrame(() => { bar.style.transition = ""; });
+});
+
 $("#autoDl").addEventListener("click", () => {
   autoDl = !autoDl;
   localStorage.setItem("dmzs_auto", autoDl ? "1" : "0");
@@ -960,8 +1137,7 @@ $("#npShuf").addEventListener("click", () => {
   toast(shuffle ? "Shuffle on" : "Shuffle off");
 });
 $("#npRep").addEventListener("click", () => {
-  repeat = (repeat + 1) % 3;
-  renderNow();
+  setRepeat((repeat + 1) % 3);
   toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
 });
 $("#npDl").addEventListener("click", () => {
@@ -1067,6 +1243,7 @@ function openMenu(id) {
     ? `${t.artist || "—"} · ${mmss(t.duration)} · ${t.codec ? t.codec.toUpperCase() + " " : ""}${t.bitrate ? t.bitrate + " kb/s · " : ""}${fmtSize(t.size)}`
     : t.status === "error" ? (t.error || "Failed") : (t.stage || "Working…");
   $("#mnDlTxt").textContent = offline.has(id) ? "Remove from device" : "Download to device";
+  $("#mnFavTxt").textContent = t.fav ? "Remove from favourites" : "Add to favourites";
   $("#mnPlay").hidden = !ready;
   $("#mnNext").hidden = !ready;
   $("#mnDl").hidden = !ready;
@@ -1098,6 +1275,7 @@ $("#menuSheet").addEventListener("click", async (e) => {
     else toast("Start a track first");
     return;
   }
+  if (action === "fav") { toggleFav(id); return; }
   if (action === "dl") { toggleOffline(id); return; }
   if (action === "retry") {
     await api("/api/tracks", {
@@ -1131,6 +1309,11 @@ document.addEventListener("visibilitychange", () => {
   // grants it without prompting.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
 
+  renderTheme();
+  renderSort();
+  renderFav();
+  repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
+  renderLoop();
   renderAuto();
   await refreshOffline();
   await load();

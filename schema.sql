@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS tracks (
   error       TEXT,
   created_at  INTEGER NOT NULL,
   claimed_at  INTEGER,                       -- ms; downloader lease, NULL when free
-  plays       INTEGER NOT NULL DEFAULT 0     -- play count, across all devices
+  plays       INTEGER NOT NULL DEFAULT 0,    -- play count, across all devices
+  fav         INTEGER NOT NULL DEFAULT 0     -- 1 when starred, shared across devices
 );
 
 CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);

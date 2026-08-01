@@ -257,7 +257,7 @@ async function handleApi(request, env, path) {
   // GET /api/tracks
   if (path === "/api/tracks" && request.method === "GET") {
     const { results } = await env.DB.prepare(
-      `SELECT id,title,artist,duration,size,codec,ext,bitrate,status,progress,stage,error,created_at,plays
+      `SELECT id,title,artist,duration,size,codec,ext,bitrate,status,progress,stage,error,created_at,plays,fav
          FROM tracks ORDER BY created_at DESC`
     ).all();
     return json({ tracks: results ?? [] });
@@ -320,6 +320,18 @@ async function handleApi(request, env, path) {
       "UPDATE tracks SET plays = plays + 1 WHERE id = ? AND status = 'ready'"
     )
       .bind(played[1])
+      .run();
+    return json({ ok: Boolean(r.meta?.changes) });
+  }
+
+  // POST /api/tracks/:id/fav  { fav: 0 | 1 }
+  // Explicit value rather than a toggle: two devices tapping at once would
+  // otherwise flip it twice and land back where they started.
+  const fav = path.match(/^\/api\/tracks\/([\w-]{11})\/fav$/);
+  if (fav && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const r = await env.DB.prepare("UPDATE tracks SET fav = ? WHERE id = ?")
+      .bind(b.fav ? 1 : 0, fav[1])
       .run();
     return json({ ok: Boolean(r.meta?.changes) });
   }

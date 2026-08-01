@@ -113,17 +113,24 @@ def report_fail(track_id: str, message: str) -> None:
 
 
 # -- title cleanup -------------------------------------------------------
-JUNK = re.compile(
-    r"""\s*[\(\[]\s*(?:
-        official\s*(?:music\s*)?(?:video|audio|lyric\s*video|visualizer)?
-      | lyrics?(?:\s*video)? | audio | video | visuali[sz]er | hd | hq | 4k
-      | remaster(?:ed)?(?:\s*\d{4})? | full\s*album | mv | m/v
-      | clip\s*officiel | audio\s*officiel | vid[ée]o\s*officielle
-    )\s*[\)\]]""",
-    re.IGNORECASE | re.VERBOSE,
-)
+# Every bracketed group goes, whatever it holds. Most of them are noise
+# ("Official Video", "Lyrics", "4K"), and the rest is not worth the ambiguity
+# of deciding case by case. This does drop the occasional "(feat. X)" or
+# "(Radio Edit)"; that is the deal.
+BRACKETS = re.compile(r"\s*[\(\[\{][^\(\)\[\]\{\}]*[\)\]\}]")
 
 DASHES = re.compile(r"\s+[-–—]\s+")
+
+
+def strip_brackets(text: str) -> str:
+    """Removes bracketed groups, innermost first so nesting unwinds."""
+    prev = None
+    while prev != text:
+        prev = text
+        text = BRACKETS.sub("", text)
+    # An unclosed bracket would otherwise survive as a stray opening character.
+    text = re.sub(r"\s*[\(\[\{].*$", "", text)
+    return text.strip(" -–—·|")
 
 
 def split_title(info: dict) -> tuple[str, str]:
@@ -133,10 +140,10 @@ def split_title(info: dict) -> tuple[str, str]:
     if track:
         if not artist:
             artist = (info.get("uploader") or "").strip()
-        return track, re.sub(r"\s*-\s*Topic$", "", artist).strip()
+        return strip_brackets(track) or track, re.sub(r"\s*-\s*Topic$", "", artist).strip()
 
     raw = (info.get("title") or "Untitled").strip()
-    clean = JUNK.sub("", raw).strip(" -–—·|")
+    clean = strip_brackets(raw)
 
     parts = DASHES.split(clean, maxsplit=1)
     if len(parts) == 2 and 1 <= len(parts[0]) <= 60:
