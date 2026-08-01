@@ -688,8 +688,15 @@ async function toggleFav(id) {
 
 function renderLoop() {
   const b = $("#loopBtn");
-  b.textContent = REP[repeat] === "one" ? "Loop 1" : "Loop";
+  // Spelled out rather than relying on the highlight alone: "Loop" lit up and
+  // "Loop" dim look far too similar to tell the two states apart.
+  b.textContent = ["Loop", "Loop all", "Loop one"][repeat];
   b.classList.toggle("on", repeat !== 0);
+  b.title = repeat === 2
+    ? "Repeating this track forever"
+    : repeat === 1
+      ? "Repeating the whole queue"
+      : "Play through once, then stop";
 }
 
 function setRepeat(v) {
