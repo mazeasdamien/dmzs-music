@@ -1,8 +1,12 @@
 # dmzs-music
 
-A personal music library that runs on Cloudflare's free tier. Paste a YouTube
-link, the audio is fetched at the best available quality, stored in the cloud,
-and plays from a PWA pinned to your iPhone home screen, online or offline.
+A personal music library that runs on Cloudflare's free tier. Tracks are added
+from the browser extension, fetched at the best available quality, stored in
+the cloud, and played from a PWA pinned to your iPhone home screen, online or
+offline.
+
+The app itself has no field for pasting links: adding is what the extension is
+for, and the phone is only ever used for listening.
 
 **Running cost: $0.** Everything fits inside Cloudflare's free allowances.
 
@@ -78,6 +82,35 @@ iPhone ◄── Worker ◄── serves audio from R2 (with Range support)
 
 ---
 
+## Using the app
+
+The library is deliberately thin. It is a listening surface, not a manager.
+
+- **Tap a track** to play it. There is no Play button: the row is the button.
+- **Shuffle** plays the visible list in random order.
+- **Recent / Most played** reorders the library.
+- **Favourites** narrows it to starred tracks.
+- **Swipe a row left** to star it, **right** to unstar it.
+- **The magnifier** reveals the search field; closing it clears the query.
+- **The download button** carries a badge with how many tracks are not yet on
+  this device, and pulls them all down when tapped. Tap again to stop.
+
+Ordering and filtering are not view-only. The sort pill, the favourites pill
+and the search box all change what the library returns, and the play queue is
+built from that same list. Choosing "Most played" therefore plays from most to
+least played; turning on "Favourites" plays only those. There is no separate
+"play this selection" path to disagree with what is on screen.
+
+In the full-screen player: **swipe down** to close, **left and right** to
+change track, the **heart** stars what is playing, and the **repeat button**
+cycles off → whole queue → this track forever.
+
+New tracks download to the device on their own, so the library is offline
+without being told. That stops by itself if the device runs out of space,
+rather than retrying a doomed download on every poll.
+
+---
+
 ## Why the downloader pulls instead of being pushed to
 
 This is the load-bearing decision of the project, and it solves two problems at
@@ -101,9 +134,9 @@ Pull    Worker ◄── Downloader    no inbound, nothing exposed   ← what th
    isn't worked around, it stops existing.
 
 **The trade-off:** your machine has to be running for a track to download. You
-paste the link from your phone anywhere, it sits in the queue and starts on the
-next boot. Playback doesn't depend on it: files live in R2 and are served by
-the Worker.
+add tracks from the extension whenever you come across them, they sit in the
+queue and start on the next boot. Playback doesn't depend on it: files live in
+R2 and are served by the Worker.
 
 A Raspberry Pi left on removes the constraint entirely for about 3 W.
 
@@ -413,7 +446,14 @@ useful to catch.
 
 **Play counts are server-side.** Counted after 20 seconds of actual playback (or
 half the track if shorter), so skipping through ten tracks doesn't count as ten
-plays.
+plays. They are what the "Most played" ordering sorts on, which is why the
+threshold matters rather than being a nicety.
+
+**Ordering and filtering are the same mechanism as playback.** The sort pill,
+the favourites pill and the search box all change what  returns, and
+ reads that same list. So choosing "Most played" does not just
+reorder the screen, it decides what Shuffle draws from and the order playback
+follows. There is no second code path for "play this selection".
 
 ---
 

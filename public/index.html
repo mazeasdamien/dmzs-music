@@ -13,26 +13,12 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/icon-192.png" type="image/png">
 <title>Music</title>
-<script>
-/* Runs before the stylesheet is applied, so the very first paint is already in
-   the right theme. Doing this from the main script at the bottom of the page
-   would show a dark flash to anyone who picked light. */
-(function () {
-  var saved = null;
-  try { saved = localStorage.getItem("dmzs_theme"); } catch (e) {}
-  var theme = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  document.documentElement.dataset.theme = theme;
-})();
-</script>
 <style>
 /* ─── design tokens ──────────────────────────────────────── */
-/* Dark is the default; [data-theme="light"] on <html> swaps the palette.
-   The theme is resolved by an inline script in <head> so the first paint is
-   already correct: applying it from the main script would flash dark first.
-
-   The now-playing view is deliberately left out of this. It sits on a blurred
-   blow-up of the artwork, which is dark whatever the theme, so its white text
-   stays white in both. */
+/* One palette. The app is dark, full stop.
+   The tokens below stayed as variables after the light theme was dropped:
+   the mini player, sheets and toast all reference them, and collapsing them
+   back into literals would only make those rules harder to read. */
 :root{
   --bg:#09090b; --elev:#141417; --elev2:#1d1d21;
   --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.13);
@@ -44,21 +30,10 @@
   --toast-bg:rgba(240,240,245,.96); --toast-fg:#101014;
   --shadow:rgba(0,0,0,.4);
   --r:7px; --row:62px; --mini:60px;
+  --minipad:clamp(6px, var(--sab), 18px);
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
 }
 
-:root[data-theme="light"]{
-  --bg:#f7f7f9; --elev:#fff; --elev2:#ececf0;
-  --line:rgba(0,0,0,.075); --line-strong:rgba(0,0,0,.14);
-  --t1:#18181b; --t2:#5c5c66; --t3:#9a9aa4;
-  /* Deeper than the dark-theme amber: #f0a04b on white fails contrast. */
-  --acc:#c9781a; --red:#d1372f; --on-acc:#fff;
-  --press:rgba(0,0,0,.04); --press2:#e0e0e6;
-  --track:rgba(0,0,0,.09); --grab:rgba(0,0,0,.18);
-  --glass:rgba(255,255,255,.97); --sheet:#fff; --input:#f2f2f5;
-  --toast-bg:rgba(24,24,28,.96); --toast-fg:#f4f4f5;
-  --shadow:rgba(0,0,0,.16);
-}
 
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden}
@@ -76,25 +51,30 @@ svg{display:block;flex:none}
 
 #app{height:100%;display:flex;flex-direction:column}
 header{flex:none;padding:calc(var(--sat) + 14px) 16px 0;background:var(--bg)}
-.htop{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.htop{display:flex;align-items:center;justify-content:space-between;gap:12px}
 h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 .meta{font-size:12.5px;color:var(--t3);margin-top:3px}
 .iconbtn{width:33px;height:33px;border-radius:50%;flex:none;background:var(--elev2);color:var(--t1);transition:background .12s,transform .08s}
 .iconbtn:active{background:var(--press2);transform:scale(.93)}
 
-.actions{display:flex;gap:8px;margin:15px 0 11px}
+.actions{display:flex;gap:8px;margin:14px 0 10px}
 /* min-width:0 is load bearing: without it, "Play" and "Shuffle" refuse to
    shrink below their text width and push the next button off screen. */
 .act{flex:1;min-width:0;height:40px;border-radius:var(--r);gap:7px;background:var(--elev);border:1px solid var(--line);font-size:14.5px;font-weight:500;letter-spacing:-.005em;transition:background .12s,transform .08s}
 .act:active{background:var(--elev2);transform:scale(.985)}
 .act svg{opacity:.9}
 
-/* The "download everything" button: fixed width, so it does not eat into the
-   two playback buttons. Shows "n/m" while working. */
-.act.sq{flex:none;min-width:44px;padding:0 11px}
-.act.sq.done{color:var(--t3)}
-.act.sq.run{color:var(--acc)}
-.act.sq .n{font-size:13px;font-variant-numeric:tabular-nums;margin-left:6px}
+/* "Download everything" is a round button like the others now. The count
+   rides in a badge, since a 33px circle has no room for "12/40" inline. */
+.iconbtn{position:relative}
+#dlAll.done{color:var(--t3)}
+#dlAll.run{color:var(--acc)}
+.badge{
+  position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:var(--acc);color:var(--on-acc);
+  font-size:9.5px;font-weight:700;line-height:16px;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
 
 /* A starred track shows its heart in the row, in the accent colour. */
 .favmark{color:var(--acc);display:inline-flex;flex:none}
@@ -111,6 +91,7 @@ h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
   letter-spacing:.02em;text-transform:uppercase;transition:background .12s,color .12s}
 .autopill[aria-pressed="true"],.autopill.on{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc);border-color:color-mix(in srgb,var(--acc) 35%,transparent)}
 
+.search[hidden]{display:none}
 .search{display:flex;align-items:center;gap:7px;height:33px;padding:0 9px;background:var(--elev);border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px}
 .search svg{color:var(--t3);flex:none}
 .search input{flex:1;font-size:14px;min-width:0}
@@ -120,9 +101,14 @@ h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 
 main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #list{padding:2px 0 0}
-#pad{height:calc(var(--mini) + var(--sab) + 18px)}
+#pad{height:calc(var(--mini) + var(--minipad) + 18px)}
 
-.row{display:flex;align-items:center;gap:11px;height:var(--row);padding:0 16px;position:relative;transition:background .1s}
+/* pan-y hands vertical scrolling back to the browser and keeps the
+   horizontal axis for the star gesture. Without it the list would try to
+   scroll and the swipe would never get its move events. */
+.row{display:flex;align-items:center;gap:11px;height:var(--row);padding:0 16px;position:relative;transition:background .1s;touch-action:pan-y}
+.row.sw-on{background:color-mix(in srgb, var(--acc) 13%, transparent)}
+.row.sw-off{background:var(--press)}
 .row:active{background:var(--press)}
 .row::after{content:"";position:absolute;left:73px;right:0;bottom:0;height:1px;background:var(--line)}
 .row:last-child::after{display:none}
@@ -173,11 +159,11 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    stops short of it on desktop instead of covering it. */
 #mini{
   position:fixed;left:0;right:var(--sbw, 0px);bottom:0;
-  height:calc(var(--mini) + var(--sab));overflow:hidden;
+  height:calc(var(--mini) + var(--minipad));overflow:hidden;
   background:var(--glass);
   -webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);
   border-top:1px solid var(--line-strong);
-  display:flex;align-items:center;gap:10px;padding:0 14px var(--sab);
+  display:flex;align-items:center;gap:10px;padding:0 14px var(--minipad);
   transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);z-index:20;
 }
 #mini.up{transform:translateY(0)}
@@ -210,11 +196,15 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 /* position:relative is required: .fb is position:absolute and would paint ON
    TOP of the image without it, so the artwork exists but stays hidden behind
    the fallback letter. Same reason as .art img above. */
-.npart img{width:100%;height:100%;object-fit:cover;position:relative;display:block}
+.npart img{width:100%;height:100%;object-fit:cover;position:relative;display:block;transition:opacity .2s ease}
 
 .npmeta{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:18px}
 .npmeta h2{font-size:20px;font-weight:600;letter-spacing:-.017em;line-height:1.25}
 .npmeta p{font-size:15px;color:rgba(255,255,255,.6);margin-top:3px}
+/* Offline state as a quiet line above the scrubber, rather than an amber
+   button that read as an action when it was only ever a status. */
+.npstate{flex:none;margin-top:14px;font-size:11px;font-weight:600;letter-spacing:.07em;
+  text-transform:uppercase;color:rgba(255,255,255,.4)}
 .npbtns{display:flex;align-items:center;gap:9px;flex:none}
 .dlbtn{width:32px;height:32px;border-radius:50%;flex:none;margin-bottom:3px;background:rgba(255,255,255,.1);color:#fff}
 .dlbtn.on{background:var(--acc);color:var(--on-acc)}
@@ -240,9 +230,11 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 
 #scrim{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
 #scrim.up{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--sheet);border-radius:15px 15px 0 0;border-top:1px solid var(--line-strong);padding:8px 16px calc(var(--sab) + 14px);transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--sheet);border-radius:15px 15px 0 0;border-top:1px solid var(--line-strong);padding:8px 16px calc(var(--sab) + 14px);transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1);touch-action:none}
+/* The URL field still needs the browser gesture for caret placement. */
+.sheet input{touch-action:auto}
 .sheet.up{transform:translateY(0)}
-.grab{width:35px;height:4px;border-radius:2px;background:var(--grab);margin:0 auto 14px}
+.grab{width:35px;height:4px;border-radius:2px;background:var(--grab);margin:0 auto 14px;cursor:grab}
 .sh-t{font-size:16px;font-weight:600;letter-spacing:-.011em;margin-bottom:3px}
 .sh-s{font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.45}
 
@@ -269,7 +261,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .mi.del svg{color:var(--red)}
 .mi[hidden]{display:none}
 
-#toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--sab) + 26px);transform:translate(-50%,14px);z-index:80;background:var(--toast-bg);color:var(--toast-fg);padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px var(--shadow);max-width:82vw;text-align:center}
+#toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--minipad) + 26px);transform:translate(-50%,14px);z-index:80;background:var(--toast-bg);color:var(--toast-fg);padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px var(--shadow);max-width:82vw;text-align:center}
 #toast.up{opacity:1;transform:translate(-50%,0)}
 
 /* ─── portrait lock ───────────────────────────────────────────
@@ -298,32 +290,25 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   <header>
     <div class="htop">
       <div style="min-width:0">
-        <h1>Library</h1>
         <div class="metarow">
           <span class="meta" id="hmeta">Loading…</span>
-          <button class="autopill" id="autoDl" aria-pressed="false" title="Automatically download new tracks to this device">Auto</button>
           <button class="autopill" id="sortBtn" title="Order of the library, and of playback">Recent</button>
-          <button class="autopill" id="loopBtn" title="Repeat the queue, or the current track">Loop</button>
           <button class="autopill" id="favBtn" title="Show and play only starred tracks">Favourites</button>
         </div>
       </div>
       <div class="htools">
-        <button class="iconbtn" id="themeBtn" aria-label="Switch theme"></button>
-        <button class="iconbtn" id="addBtn" aria-label="Add">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <button class="iconbtn" id="dlAll" aria-label="Download everything to this device"></button>
+        <button class="iconbtn" id="searchBtn" aria-label="Search" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
         </button>
       </div>
     </div>
     <div class="actions">
-      <button class="act" id="playAll">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Play
-      </button>
       <button class="act" id="shufAll">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Shuffle
       </button>
-      <button class="act sq" id="dlAll" aria-label="Download everything to this device"></button>
     </div>
-    <div class="search" id="searchWrap">
+    <div class="search" id="searchWrap" hidden>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
       <input id="q" type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false">
       <button class="clr" id="qclr" aria-label="Clear">
@@ -353,20 +338,14 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <div class="lbl" id="npSrc">Now playing</div>
-    <button class="iconbtn" id="npQueue" aria-label="Queue">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 6h13M4 12h13M4 18h9M19 13v6M22 16h-6"/></svg>
-    </button>
+    <span class="iconbtn" aria-hidden="true" style="visibility:hidden"></span>
   </div>
   <div class="npart"><div class="box" id="npArt"></div></div>
   <div class="npmeta">
     <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
-    <div class="npbtns">
     <button class="dlbtn" id="npFav" aria-label="Favourite"></button>
-    <button class="dlbtn" id="npDl" aria-label="Offline">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
-    </button>
-    </div>
   </div>
+  <div class="npstate" id="npState"></div>
   <div class="scrub" id="scrub">
     <div class="bar"><span id="npFill"></span></div>
     <div class="times num"><span id="npCur">0:00</span><span id="npRem">-0:00</span></div>
@@ -389,19 +368,6 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 </div>
 
 <div id="scrim"></div>
-
-<div class="sheet" id="addSheet">
-  <div class="grab"></div>
-  <div class="sh-t">Add a track</div>
-  <div class="sh-s">Paste a YouTube link. The audio is fetched at the highest quality, with no re-encoding.</div>
-  <div class="urlbox">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8b8b93" stroke-width="1.9" stroke-linecap="round"><path d="M10 13.5a4 4 0 0 0 5.7.2l3-3a4 4 0 0 0-5.7-5.7L11.3 6.7"/><path d="M14 10.5a4 4 0 0 0-5.7-.2l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg>
-    <input id="url" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off" autocorrect="off" spellcheck="false">
-    <button class="paste" id="pasteBtn">Paste</button>
-  </div>
-  <div class="formerr" id="addErr"></div>
-  <button class="cta" id="addCta" disabled>Add</button>
-</div>
 
 <div class="sheet" id="menuSheet">
   <div class="grab"></div>
@@ -624,10 +590,10 @@ function renderDlAll() {
   b.classList.toggle("done", !bulk.on && !missing);
 
   if (bulk.on) {
-    b.innerHTML = `${ICON_ST}<span class="n">${bulk.done}/${bulk.total}</span>`;
-    b.setAttribute("aria-label", "Stop downloading");
+    b.innerHTML = `${ICON_ST}<span class="badge">${bulk.total - bulk.done}</span>`;
+    b.setAttribute("aria-label", `Stop downloading, ${bulk.total - bulk.done} left`);
   } else if (missing) {
-    b.innerHTML = `${ICON_DL}<span class="n">${missing}</span>`;
+    b.innerHTML = `${ICON_DL}<span class="badge">${missing}</span>`;
     b.setAttribute("aria-label", `Download ${missing} track(s) to this device`);
   } else {
     b.innerHTML = ICON_OK;
@@ -635,20 +601,15 @@ function renderDlAll() {
   }
 }
 
-/* Auto: every newly ready track goes to the device without thinking about it.
-   The setting is per device, as offline storage is too, and a pinned app has
-   its own container, separate from Safari. */
-let autoDl = localStorage.getItem("dmzs_auto") === "1";
+/* Every newly ready track goes to the device by itself. This used to be a
+   switch; there was never a reason to turn it off, so it is simply on. The
+   variable survives because the quota handler still flips it to stop a full
+   device from retrying the same doomed download on every poll. */
+let autoDl = true;
 
-/* ═══ theme, order, repeat ═════════════════════════════════
-   Three small per-device settings. They live in localStorage rather than in
-   D1: which theme this screen wants, and how this device likes its queue, is
-   not something the library itself should carry across devices. */
-
-const ICON_SUN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/></svg>`;
-const ICON_MOON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.4A8.4 8.4 0 0 1 10.6 4a8.4 8.4 0 1 0 9.4 9.4z"/></svg>`;
-
-const theme = () => document.documentElement.dataset.theme;
+/* ═══ view settings ════════════════════════════════════════
+   How this device likes its list. Kept in localStorage rather than in D1:
+   the ordering a phone prefers is not a property of the library. */
 
 /* The list owns the scrollbar, not the document, so its width is the gap
    between main's border box and its content box. Zero on iOS, where scrollbars
@@ -660,16 +621,6 @@ function measureScrollbar() {
   document.documentElement.style.setProperty("--sbw", w + "px");
 }
 addEventListener("resize", measureScrollbar);
-
-function renderTheme() {
-  const light = theme() === "light";
-  // The icon shows where the button takes you, not where you are.
-  $("#themeBtn").innerHTML = light ? ICON_MOON : ICON_SUN;
-  $("#themeBtn").setAttribute("aria-label", light ? "Switch to dark" : "Switch to light");
-  // The iOS status bar sits on the shell, so it follows the shell's colour.
-  document.querySelector('meta[name="theme-color"]')
-    .setAttribute("content", light ? "#f7f7f9" : "#09090b");
-}
 
 /* Order of the library. buildQueue() reads the same list, so changing this
    also changes what "Play" plays, and in which direction. */
@@ -707,28 +658,12 @@ async function toggleFav(id) {
   }).catch(() => {});
 }
 
-function renderLoop() {
-  const b = $("#loopBtn");
-  // Spelled out rather than relying on the highlight alone: "Loop" lit up and
-  // "Loop" dim look far too similar to tell the two states apart.
-  b.textContent = ["Loop", "Loop all", "Loop one"][repeat];
-  b.classList.toggle("on", repeat !== 0);
-  b.title = repeat === 2
-    ? "Repeating this track forever"
-    : repeat === 1
-      ? "Repeating the whole queue"
-      : "Play through once, then stop";
-}
-
+/* Repeat is set from the full-screen player only. It persists, so a track
+   left on loop is still on loop after a reload. */
 function setRepeat(v) {
   repeat = v;
   localStorage.setItem("dmzs_repeat", String(repeat));
-  renderLoop();
   renderNow();
-}
-
-function renderAuto() {
-  $("#autoDl").setAttribute("aria-pressed", autoDl ? "true" : "false");
 }
 
 function autoSweep() {
@@ -782,7 +717,7 @@ async function downloadAll(silent = false) {
   if (full) {
     // Turn auto off: without this, every poll would restart a download that
     // is doomed to fail, forever.
-    if (autoDl) { autoDl = false; localStorage.setItem("dmzs_auto", "0"); renderAuto(); }
+    autoDl = false;
     toast("Storage full — auto-download turned off");
   } else if (silent) {
     if (failed) toast(`${failed} track${failed > 1 ? "s" : ""} failed`);
@@ -881,6 +816,47 @@ function renderList() {
   renderDlAll();
 }
 
+/* The full-screen artwork used to be rebuilt from scratch on every track
+   change: the letter placeholder painted immediately and the <img> arrived a
+   moment later, so skipping through tracks flashed letter, cover, letter,
+   cover. The elements are built once and the image is swapped only once the
+   next one has finished loading, so the previous cover holds until then.
+
+   npArtId also guards against a fast skip: if the track changed again while an
+   image was in flight, the late arrival is dropped rather than painted over
+   whatever is now playing. */
+let npArtId = null;
+
+function setNpArt(t) {
+  const box = $("#npArt");
+  if (!t) { npArtId = null; box.innerHTML = ""; return; }
+  if (npArtId === t.id) return;
+  npArtId = t.id;
+
+  if (!box.querySelector(".fb") || !box.querySelector("img")) {
+    box.innerHTML = `<div class="fb"></div><img alt="" style="opacity:0">`;
+  }
+  const fb = box.querySelector(".fb");
+  const img = box.querySelector("img");
+
+  const h = hue(t.title + t.artist);
+  // textContent rather than a built string: no escaping to get wrong.
+  fb.textContent = ((t.title || "?").trim()[0] || "?").toUpperCase();
+  fb.style.background =
+    `linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))`;
+
+  if (t.status !== "ready") { img.style.opacity = "0"; return; }
+
+  const pre = new Image();
+  pre.onload = () => {
+    if (npArtId !== t.id) return;
+    img.src = pre.src;
+    img.style.opacity = "1";
+  };
+  pre.onerror = () => { if (npArtId === t.id) img.style.opacity = "0"; };
+  pre.src = artURL(t.id);
+}
+
 function renderNow() {
   const t = byId(queue[qi]);
   $("#mini").classList.toggle("up", !!t);
@@ -889,11 +865,11 @@ function renderNow() {
   $("#mArt").innerHTML = artHTML(t);
   $("#mTtl").textContent = t.title;
   $("#mArtist").textContent = t.artist || "—";
-  $("#npArt").innerHTML = artHTML(t);
+  setNpArt(t);
   $("#npTtl").textContent = t.title;
   $("#npArtist").textContent = t.artist || "—";
   $("#npbg").style.backgroundImage = `url(${artURL(t.id)})`;
-  $("#npDl").classList.toggle("on", offline.has(t.id));
+  $("#npState").textContent = offline.has(t.id) ? "On this device" : "Streaming";
   $("#npFav").innerHTML = t.fav ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>` : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3s-7.4-4.6-9.2-8.6C1.4 8.6 3 5.3 6.1 4.6c2-.5 3.9.4 4.9 2 1-1.6 2.9-2.5 4.9-2 3.1.7 4.7 4 3.3 7.1-1.8 4-9.2 8.6-9.2 8.6z"/></svg>`;
   $("#npFav").classList.toggle("on", Boolean(t.fav));
   $("#npFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
@@ -1092,15 +1068,25 @@ $("#qclr").addEventListener("click", () => {
   $("#q").value = ""; $("#searchWrap").classList.remove("has"); renderList();
 });
 
-$("#playAll").addEventListener("click", () => startAll(false));
 $("#shufAll").addEventListener("click", () => startAll(true));
 $("#dlAll").addEventListener("click", () => downloadAll(false));
 
-$("#themeBtn").addEventListener("click", () => {
-  const next = theme() === "light" ? "dark" : "light";
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem("dmzs_theme", next); } catch {}
-  renderTheme();
+/* Search is behind a button now: a field that is empty nine visits out of ten
+   does not deserve permanent space above the list. */
+$("#searchBtn").addEventListener("click", () => {
+  const w = $("#searchWrap");
+  const open = w.hasAttribute("hidden");
+  w.toggleAttribute("hidden", !open);
+  $("#searchBtn").setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    $("#q").focus();
+  } else if ($("#q").value) {
+    // Closing has to clear the query, or the list stays filtered by something
+    // no longer on screen.
+    $("#q").value = "";
+    $("#searchWrap").classList.remove("has");
+    renderList();
+  }
 });
 
 $("#sortBtn").addEventListener("click", () => {
@@ -1121,11 +1107,6 @@ $("#favBtn").addEventListener("click", () => {
   else toast(favOnly ? "Favourites only" : "Showing everything");
 });
 
-$("#loopBtn").addEventListener("click", () => {
-  setRepeat((repeat + 1) % 3);
-  toast(["Repeat off", "Repeat all", "Repeat one"][repeat]);
-});
-
 /* Away from the tab, timeupdate is throttled while the audio keeps playing, so
    the bar is stale on return and its width transition animates across the gap.
    That slide is the "jump". Snap to the real position instead, then restore
@@ -1137,14 +1118,6 @@ document.addEventListener("visibilitychange", () => {
   renderProgress();
   void bar.offsetWidth;
   requestAnimationFrame(() => { bar.style.transition = ""; });
-});
-
-$("#autoDl").addEventListener("click", () => {
-  autoDl = !autoDl;
-  localStorage.setItem("dmzs_auto", autoDl ? "1" : "0");
-  renderAuto();
-  if (autoDl) { toast("Auto-download on"); autoSweep(); }
-  else toast("Auto-download off");
 });
 
 // Reloading mid bulk-download would silently lose the remaining tracks, so
@@ -1163,7 +1136,6 @@ $("#npClose").addEventListener("click", () => $("#np").classList.remove("up"));
 $("#npplay").addEventListener("click", () => toggle());
 $("#npNext").addEventListener("click", () => next());
 $("#npPrev").addEventListener("click", () => prev());
-$("#npQueue").addEventListener("click", () => toast(`${Math.max(0, queue.length - qi - 1)} up next`));
 
 $("#npShuf").addEventListener("click", () => {
   shuffle = !shuffle;
@@ -1181,10 +1153,6 @@ $("#npFav").addEventListener("click", () => {
   if (t) toggleFav(t.id);
 });
 
-$("#npDl").addEventListener("click", () => {
-  const t = byId(queue[qi]);
-  if (t) toggleOffline(t.id);
-});
 
 /* scrubber */
 const scrub = $("#scrub");
@@ -1201,19 +1169,126 @@ function seek(e) {
 scrub.addEventListener("pointerdown", (e) => { scrub.setPointerCapture(e.pointerId); seek(e); });
 scrub.addEventListener("pointermove", (e) => { if (scrub.hasPointerCapture(e.pointerId)) seek(e); });
 
-/* glisser vers le bas pour refermer */
-let dy = 0, y0 = null;
-$("#np").addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+/* Swipe the full-screen player: down to close, left and right to change
+   track. The axis is decided once, on the first few pixels, and then held for
+   the rest of the gesture, so a drag that wanders diagonally does not flip
+   between closing and skipping halfway through.
+
+   The artwork alone follows a horizontal swipe. Sliding the whole screen would
+   mean animating the blurred backdrop too, which is expensive, and it reads
+   just as well as the record being pushed aside. */
+let dy = 0, dx = 0, y0 = null, x0 = 0, axis = null;
+
+const npArtBox = () => $("#npArt").parentElement;
+
+$("#np").addEventListener("touchstart", (e) => {
+  y0 = e.touches[0].clientY;
+  x0 = e.touches[0].clientX;
+  dy = dx = 0;
+  axis = null;
+  npArtBox().style.transition = "none";
+}, { passive: true });
+
 $("#np").addEventListener("touchmove", (e) => {
   if (y0 === null || e.target.closest("#scrub, .transport")) return;
-  dy = Math.max(0, e.touches[0].clientY - y0);
-  if (dy > 0) $("#np").style.transform = `translateY(${dy}px)`;
+  const ry = e.touches[0].clientY - y0;
+  const rx = e.touches[0].clientX - x0;
+
+  if (!axis) {
+    if (Math.abs(rx) < 10 && Math.abs(ry) < 10) return;
+    axis = Math.abs(rx) > Math.abs(ry) ? "x" : "y";
+  }
+
+  if (axis === "y") {
+    dy = Math.max(0, ry);
+    $("#np").style.transform = `translateY(${dy}px)`;
+  } else {
+    dx = rx;
+    // Damped, so it is obvious the artwork is being dragged rather than thrown.
+    npArtBox().style.transform = `translateX(${rx * 0.55}px)`;
+    npArtBox().style.opacity = String(Math.max(0.35, 1 - Math.abs(rx) / 420));
+  }
 }, { passive: true });
+
 $("#np").addEventListener("touchend", () => {
   $("#np").style.transform = "";
-  if (dy > 95) $("#np").classList.remove("up");
+  npArtBox().style.transition = "";
+  npArtBox().style.transform = "";
+  npArtBox().style.opacity = "";
+
+  if (axis === "y" && dy > 95) $("#np").classList.remove("up");
+  // Left goes forward, matching the direction the queue moves.
+  else if (axis === "x" && dx < -70) next(false);
+  else if (axis === "x" && dx > 70) prev();
+
   y0 = null;
+  axis = null;
 });
+
+/* Swipe a row sideways to star it: left adds, right removes.
+
+   The axis is locked on the first ten pixels and held for the rest of the
+   gesture, so a thumb travelling diagonally down the list scrolls instead of
+   quietly restarring things. Rows are re-rendered wholesale by renderList(),
+   so every inline style set here is cleared before that can happen. */
+(function rowSwipe() {
+  const list = $("#list");
+  const HOLD = 70;
+  let row = null, id = null, x0 = 0, y0 = 0, dx = 0, axis = null;
+
+  function reset() {
+    if (!row) return;
+    row.style.transition = "";
+    row.style.transform = "";
+    row.classList.remove("sw-on", "sw-off");
+    row = null;
+    axis = null;
+  }
+
+  list.addEventListener("touchstart", (e) => {
+    const r = e.target.closest(".row");
+    // The overflow button owns its own tap.
+    if (!r || e.target.closest(".dots")) return;
+    row = r;
+    id = r.dataset.id;
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    dx = 0;
+    axis = null;
+    row.style.transition = "none";
+  }, { passive: true });
+
+  list.addEventListener("touchmove", (e) => {
+    if (!row) return;
+    const rx = e.touches[0].clientX - x0;
+    const ry = e.touches[0].clientY - y0;
+
+    if (!axis) {
+      if (Math.abs(rx) < 10 && Math.abs(ry) < 10) return;
+      if (Math.abs(ry) >= Math.abs(rx)) { reset(); return; }
+      axis = "x";
+    }
+
+    dx = rx;
+    // Damped: the row follows the thumb without running away from it.
+    row.style.transform = `translateX(${rx * 0.55}px)`;
+    row.classList.toggle("sw-on", rx < -20);
+    row.classList.toggle("sw-off", rx > 20);
+  }, { passive: true });
+
+  list.addEventListener("touchend", () => {
+    if (!row || axis !== "x") return reset();
+    const t = byId(id);
+    const d = dx;
+    reset();
+    if (!t || t.status !== "ready") return;
+
+    if (d < -HOLD) t.fav ? toast("Already a favourite") : toggleFav(t.id);
+    else if (d > HOLD) t.fav ? toggleFav(t.id) : toast("Not a favourite");
+  });
+
+  list.addEventListener("touchcancel", reset);
+})();
 
 /* ═══ sheets ═══════════════════════════════════════════════ */
 const openSheet = (s) => { $("#scrim").classList.add("up"); $(s).classList.add("up"); };
@@ -1223,55 +1298,70 @@ function closeSheets() {
 }
 $("#scrim").addEventListener("click", closeSheets);
 
+/* Drag a sheet down to dismiss it.
+
+   The grab handle at the top promised this gesture and nothing implemented it,
+   so the only way out was the scrim behind. Pointer events cover touch and
+   mouse in one path.
+
+   Two things keep taps working. The drag only begins past a few pixels of
+   mostly-vertical movement, so a tap on a menu row never turns into a drag.
+   And pointer capture is deliberately not used: it would retarget the events
+   and swallow the click on the row underneath. */
+function dismissable(sheet) {
+  const CLOSE_AT = 90;     // px dragged before it counts as a dismissal
+  const SPEED_AT = 0.5;    // px per ms, so a short flick works too
+  let y0 = 0, x0 = 0, dy = 0, t0 = 0, live = false, armed = false;
+
+  const move = (e) => {
+    if (!armed) return;
+    const d = e.clientY - y0;
+
+    if (!live) {
+      // Ignore horizontal wandering and the jitter of a normal tap.
+      if (Math.abs(d) < 6) return;
+      if (Math.abs(e.clientX - x0) > Math.abs(d)) { armed = false; return; }
+      live = true;
+      sheet.style.transition = "none";
+    }
+
+    dy = Math.max(0, d);
+    sheet.style.transform = `translateY(${dy}px)`;
+    // The backdrop lifts with the sheet, so the gesture feels attached.
+    $("#scrim").style.opacity = String(Math.max(0, 1 - dy / 280));
+    e.preventDefault();
+  };
+
+  const end = () => {
+    if (!armed) return;
+    armed = false;
+    removeEventListener("pointermove", move);
+    removeEventListener("pointerup", end);
+    removeEventListener("pointercancel", end);
+    if (!live) return;
+
+    live = false;
+    sheet.style.transition = "";
+    sheet.style.transform = "";
+    $("#scrim").style.opacity = "";
+    if (dy > CLOSE_AT || dy / Math.max(1, Date.now() - t0) > SPEED_AT) closeSheets();
+  };
+
+  sheet.addEventListener("pointerdown", (e) => {
+    // Let the URL field be selected and scrubbed without the sheet moving.
+    if (e.target.closest("input, textarea")) return;
+    y0 = e.clientY; x0 = e.clientX; dy = 0; t0 = Date.now();
+    armed = true; live = false;
+    addEventListener("pointermove", move, { passive: false });
+    addEventListener("pointerup", end);
+    addEventListener("pointercancel", end);
+  });
+}
+
+document.querySelectorAll(".sheet").forEach(dismissable);
+
 /* -- adding a track -- */
 let adding = false;
-$("#addBtn").addEventListener("click", () => {
-  $("#url").value = "";
-  $("#addErr").classList.remove("show");
-  $("#addCta").disabled = true;
-  $("#addCta").innerHTML = "Add";
-  openSheet("#addSheet");
-  setTimeout(() => $("#url").focus(), 330);
-});
-$("#url").addEventListener("input", () => {
-  $("#addCta").disabled = !$("#url").value.trim();
-  $("#addErr").classList.remove("show");
-});
-$("#pasteBtn").addEventListener("click", async () => {
-  try {
-    const txt = await navigator.clipboard.readText();
-    if (txt) { $("#url").value = txt.trim(); $("#addCta").disabled = false; }
-  } catch { toast("Allow clipboard access, or paste manually"); }
-});
-
-$("#addCta").addEventListener("click", async () => {
-  const url = $("#url").value.trim();
-  if (!url || adding) return;
-  adding = true;
-  $("#addCta").disabled = true;
-  $("#addCta").innerHTML = `<span class="spin"></span>Adding…`;
-  $("#addErr").classList.remove("show");
-  try {
-    const res = await api("/api/tracks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-    closeSheets();
-    toast(data.duplicate ? "Already in your library" : "Download started");
-    load();
-  } catch (e) {
-    $("#addErr").textContent = e.message;
-    $("#addErr").classList.add("show");
-    $("#addCta").disabled = false;
-  } finally {
-    adding = false;
-    $("#addCta").innerHTML = "Add";
-  }
-});
-
 /* -- context menu -- */
 let menuId = null;
 function openMenu(id) {
@@ -1344,13 +1434,10 @@ document.addEventListener("visibilitychange", () => {
   // grants it without prompting.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
 
-  renderTheme();
   renderSort();
   measureScrollbar();
   renderFav();
   repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
-  renderLoop();
-  renderAuto();
   await refreshOffline();
   await load();
 
