@@ -162,15 +162,23 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .empty{padding:60px 34px;text-align:center;color:var(--t3);font-size:14px;line-height:1.6}
 .empty b{display:block;color:var(--t2);font-weight:500;margin-bottom:5px}
 
+/* Docked to the very bottom rather than floating 8px above it.
+   env(safe-area-inset-bottom) is not a fixed number: in iOS Safari with
+   viewport-fit=cover it swells to reserve the browser toolbar, which pushed
+   the bar into the middle of the list. Anchoring at 0 and moving that inset
+   into the padding means the surface always reaches the screen edge, whatever
+   the browser reports.
+
+   --sbw is the width of the list's scrollbar, measured at runtime, so the bar
+   stops short of it on desktop instead of covering it. */
 #mini{
-  position:fixed;left:8px;right:8px;bottom:calc(var(--sab) + 8px);
-  max-width:640px;margin-inline:auto;
-  height:var(--mini);border-radius:11px;overflow:hidden;
+  position:fixed;left:0;right:var(--sbw, 0px);bottom:0;
+  height:calc(var(--mini) + var(--sab));overflow:hidden;
   background:var(--glass);
   -webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);
-  border:1px solid var(--line-strong);
-  display:flex;align-items:center;gap:10px;padding:0 9px;
-  transform:translateY(calc(100% + 20px));transition:transform .28s cubic-bezier(.32,.72,0,1);z-index:20;
+  border-top:1px solid var(--line-strong);
+  display:flex;align-items:center;gap:10px;padding:0 14px var(--sab);
+  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);z-index:20;
 }
 #mini.up{transform:translateY(0)}
 #mini .art{width:42px;height:42px;border-radius:4px}
@@ -641,6 +649,17 @@ const ICON_SUN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" st
 const ICON_MOON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.4A8.4 8.4 0 0 1 10.6 4a8.4 8.4 0 1 0 9.4 9.4z"/></svg>`;
 
 const theme = () => document.documentElement.dataset.theme;
+
+/* The list owns the scrollbar, not the document, so its width is the gap
+   between main's border box and its content box. Zero on iOS, where scrollbars
+   float over the content. */
+function measureScrollbar() {
+  const m = $("#main");
+  if (!m) return;
+  const w = Math.max(0, m.offsetWidth - m.clientWidth);
+  document.documentElement.style.setProperty("--sbw", w + "px");
+}
+addEventListener("resize", measureScrollbar);
 
 function renderTheme() {
   const light = theme() === "light";
@@ -1327,6 +1346,7 @@ document.addEventListener("visibilitychange", () => {
 
   renderTheme();
   renderSort();
+  measureScrollbar();
   renderFav();
   repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
   renderLoop();
