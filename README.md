@@ -25,10 +25,12 @@ EFF intervened.
 *Downloading breaches YouTube's terms of service.* That is contractual, not
 criminal. The realistic consequence is account or access termination.
 
-*Copyright is the real problem.* Most EU countries, France included, have a
-private-copying exception, but it does **not** cover circumventing a
-technological protection measure (Article 6 of the InfoSoc Directive; Article
-L331-5 of the French Intellectual Property Code). In November 2024 the Hamburg
+*Copyright is the real problem.* Most EU countries have a private-copying
+exception, France included, which is where the author of this repository lives
+and where this project was built. That exception does **not** cover
+circumventing a technological protection measure (Article 6 of the InfoSoc
+Directive; Article L331-5 of the French Intellectual Property Code), so it does
+not cover what this project does. In November 2024 the Hamburg
 Higher Regional Court upheld, finally and without further appeal, that
 YouTube's "rolling cipher" is an effective technological protection measure and
 that youtube-dl circumvents it. That is the most directly applicable European
