@@ -13,7 +13,16 @@
 
 const SHELL = "dmzs-shell-v3";
 const ART = "dmzs-art-v3";
-const KEEP = [SHELL, ART];
+
+// MUST match MEDIA_CACHE in index.html.
+//
+// This cache is created and filled by the page, never by this file, but the
+// activate handler below deletes every cache that is not in KEEP. Leaving it
+// out means each service worker update silently wipes every downloaded track,
+// which is exactly what offline playback depends on. Keep it listed.
+const MEDIA = "dmzs-media-v1";
+
+const KEEP = [SHELL, ART, MEDIA];
 
 const SHELL_FILES = [
   "/",

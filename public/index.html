@@ -453,6 +453,21 @@ async function api(path, opts = {}) {
   return res;
 }
 
+/* The library list is kept locally as well.
+   Without this the app is useless on a plane: the audio files sit in the
+   Cache API, but the list of what exists only comes from /api/tracks, and the
+   service worker deliberately does not intercept /api/. No list means nothing
+   to tap, even though every file is right there on the device. */
+const TRACKS_KEY = "dmzs_tracks";
+let stale = false;
+
+const saveTracks = (list) => {
+  try { localStorage.setItem(TRACKS_KEY, JSON.stringify(list)); } catch {}
+};
+const loadTracks = () => {
+  try { return JSON.parse(localStorage.getItem(TRACKS_KEY) || "[]"); } catch { return []; }
+};
+
 async function load() {
   let data;
   try {
@@ -460,11 +475,22 @@ async function load() {
     if (!res.ok) throw new Error(res.status);
     data = await res.json();
   } catch (e) {
-    if (String(e.message) !== "401") console.warn("chargement impossible", e);
+    // 401 already replaced the page, nothing left to draw.
+    if (String(e.message) === "401") return;
+
+    // No connection, or the Worker is unreachable: fall back to the last
+    // known library so downloaded tracks stay playable.
+    console.warn("library fetch failed, falling back to the local copy", e);
+    if (!tracks.length) tracks = loadTracks();
+    stale = true;
+    renderList();
+    renderNow();
     schedulePoll();
     return;
   }
   tracks = data.tracks || [];
+  stale = false;
+  saveTracks(tracks);
   renderList();
   renderNow();
   schedulePoll();
@@ -474,10 +500,15 @@ async function load() {
 function schedulePoll() {
   clearTimeout(pollTimer);
   const busy = tracks.some((t) => t.status === "pending" || t.status === "downloading");
-  if (busy && document.visibilityState === "visible") {
+  // navigator.onLine guard: with no connection every poll is a guaranteed
+  // failure, and in flight mode that would just drain the battery.
+  if (busy && navigator.onLine && document.visibilityState === "visible") {
     pollTimer = setTimeout(load, 1500);
   }
 }
+
+// Connection back: pick the real library up again without a manual reload.
+addEventListener("online", () => load());
 
 /* ═══ offline ══════════════════════════════════════════════
    Stored through the Cache API, played back from a blob: URL.
@@ -678,8 +709,11 @@ function renderList() {
   const bytes = ready.reduce((s, t) => s + (t.size || 0), 0);
   const off = ready.filter((t) => offline.has(t.id)).length;
   $("#hmeta").textContent = ready.length
-    ? `${ready.length} track${ready.length > 1 ? "s" : ""} · ${fmtSize(bytes)} · ${off} offline`
-    : "Empty library";
+    ? `${ready.length} track${ready.length > 1 ? "s" : ""} · ${fmtSize(bytes)} · ${off} offline` +
+      (stale ? " · no connection" : "")
+    : stale
+      ? "No connection, and nothing stored on this device"
+      : "Empty library";
 
   $("#dlAll").hidden = !ready.length;
   renderDlAll();
@@ -795,7 +829,10 @@ function countPlay() {
   countedId = id;
   // Increment locally right away, so the display does not wait on the round trip.
   t.plays = (t.plays || 0) + 1;
+  saveTracks(tracks);
   renderList();
+  // Offline this POST simply fails: the count stays local until the next
+  // successful load, which then overwrites it with the server's value.
   api(`/api/tracks/${id}/play`, { method: "POST" }).catch(() => {});
 }
 

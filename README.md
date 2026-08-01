@@ -362,6 +362,18 @@ playback silently. Files are stored in the Cache API, read back as a `Blob` and
 played from a `blob:` URL, which Safari handles natively. The service worker
 only deals with the app shell and artwork.
 
+**The library list is stored locally too.** The audio lives in the Cache API,
+but the list of what exists only comes from `/api/tracks`, which the service
+worker deliberately does not intercept. Without a local copy of that list the
+app opens on a plane and shows an empty library, with every file sitting right
+there on the device. The last successful response is therefore kept in
+`localStorage` and used as a fallback.
+
+**The media cache is listed in the service worker's `KEEP` array.** It is
+created by the page, not by the worker, and the activate handler deletes every
+cache that is not in `KEEP`. Leaving it out makes each service worker update
+wipe every downloaded track.
+
 **One `<audio>` element, never Web Audio.** `AudioContext` is suspended in the
 background on iOS, which would kill lock-screen playback. A single element
 "blessed" by the first user gesture can then chain tracks, including from the
