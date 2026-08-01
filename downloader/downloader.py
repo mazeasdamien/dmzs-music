@@ -46,6 +46,11 @@ YT_PROXY = os.environ.get("YT_PROXY", "")
 # about thirty seconds, so the wait is invisible.
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "30"))
 
+# How long to stop asking after YouTube blocks the IP. Half an hour is enough
+# for a burst-triggered block to lapse; a longer one needs a proxy or cookies,
+# and no polling interval will talk you out of it.
+BOT_COOLDOWN = float(os.environ.get("BOT_COOLDOWN", "1800"))
+
 COOKIE_FILE = None
 if YT_COOKIES.strip():
     COOKIE_FILE = "/tmp/yt-cookies.txt"
@@ -374,20 +379,28 @@ def process(job: dict) -> None:
     print(f"[job] {track_id} — done ({len(payload)} bytes, {ext})")
 
 
-def handle(job: dict) -> None:
-    """Handles one job. A failure is reported to the Worker, never fatal to the loop."""
+def handle(job: dict) -> bool:
+    """
+    Handles one job. A failure is reported to the Worker, never fatal to the
+    loop. Returns True when the failure was anti-bot filtering, which the
+    caller treats differently from an ordinary one.
+    """
     try:
         process(job)
+        return False
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         msg = str(e)
         low = msg.lower()
-        if "sign in to confirm" in low or "bot" in low:
-            msg = ("YouTube blocked the request (anti-bot filtering on this IP). "
-                   "See the README, section \u00ab Si YouTube bloque \u00bb.")
+        blocked = "sign in to confirm" in low or "bot" in low or "429" in low
+        if blocked:
+            msg = ("YouTube blocked the request: anti-bot filtering on this IP. "
+                   "Waiting before trying again. See the README, "
+                   "section \"If YouTube blocks you\".")
         elif "unavailable" in low or "private" in low:
             msg = "Video unavailable or private."
         report_fail(job["id"], msg[:400])
+        return blocked
 
 
 # -- polling loop --------------------------------------------------------
@@ -419,7 +432,18 @@ def main() -> None:
         if job:
             idle = False
             print(f"[poll] job received: {job['id']}")
-            handle(job)
+            blocked = handle(job)
+
+            if blocked:
+                # Without this the loop went straight back for the next job and
+                # failed it the same way, so one block turned into a queue-wide
+                # wipeout in under a minute. Anti-bot filtering is applied to
+                # the IP, not the request: the only useful response is to stop
+                # asking for a while.
+                print(f"[poll] anti-bot filtering, pausing {BOT_COOLDOWN / 60:.0f} min")
+                time.sleep(BOT_COOLDOWN)
+                continue
+
             # Straight back round: a queue of several tracks drains back to
             # back, without waiting an interval between each.
             continue

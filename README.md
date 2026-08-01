@@ -320,6 +320,7 @@ All through environment variables.
 | `APP_URL` | none | public URL of the Worker (required) |
 | `WORKER_TOKEN` | none | shared secret (required) |
 | `POLL_INTERVAL` | `30` | seconds between empty polls |
+| `BOT_COOLDOWN` | `1800` | seconds to stop asking after YouTube blocks the IP |
 | `YT_COOKIES` | none | Netscape-format cookies, if anti-bot kicks in |
 | `YT_PROXY` | none | `http://user:pass@host:port` |
 
@@ -348,7 +349,10 @@ earlier architecture, which egressed from Cloudflare IPs. If you do see
 "YouTube blocked the request":
 
 **a. Slow down.** The downloader already serialises tracks and sleeps between
-requests. If you just queued thirty tracks, wait a few hours.
+requests, and it now stops asking for half an hour once a block is reported.
+That pause matters: without it the loop went straight to the next job, failed
+it the same way, and turned one block into a queue-wide wipeout in under a
+minute. If you just queued thirty tracks, give it a few hours and retry them.
 
 **b. A residential proxy**, mostly useful if you run the image on a VPS rather
 than at home. Set `YT_PROXY`.

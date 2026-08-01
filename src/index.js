@@ -239,8 +239,14 @@ async function handleInternal(request, env, path) {
   if (path === "/internal/fail" && request.method === "POST") {
     const b = await request.json();
     if (!b.id) return json({ error: "missing id" }, 400);
+    // A track that fails before yt-dlp reports any metadata keeps the
+    // placeholder title, so the row reads "Loading…" forever with no way to
+    // tell which video it was. Fall back to the id, which is at least
+    // identifiable and pasteable back into YouTube.
     await env.DB.prepare(
-      "UPDATE tracks SET status = 'error', stage = '', claimed_at = NULL, error = ? WHERE id = ?"
+      `UPDATE tracks SET status = 'error', stage = '', claimed_at = NULL, error = ?,
+                         title = CASE WHEN title = 'Loading…' THEN id ELSE title END
+         WHERE id = ?`
     )
       .bind(String(b.error || "Unknown failure").slice(0, 500), b.id)
       .run();
