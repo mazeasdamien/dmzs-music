@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/icon-192.png" type="image/png">
-<title>Music</title>
+<title>dmzs-music</title>
 <style>
 /* ─── design tokens ──────────────────────────────────────── */
 /* One palette. The app is dark, full stop.
@@ -169,6 +169,12 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   border-top:1px solid var(--line-strong);
   display:flex;align-items:center;gap:10px;padding:0 14px var(--minipad);
   transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);z-index:20;
+  /* Whatever the browser decides bottom:0 means, anything left below the bar
+     is painted in the bar own colour. On iOS that strip varies with the
+     browser chrome and the home indicator, and chasing its height is a losing
+     game; continuing the surface into it costs nothing and always looks
+     right. The shadow falls outside the viewport when there is no strip. */
+  box-shadow:0 60px 0 0 var(--glass);
 }
 #mini.up{transform:translateY(0)}
 #mini .art{width:42px;height:42px;border-radius:4px}
