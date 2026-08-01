@@ -1,10 +1,10 @@
 /**
- * Bouton « Add to Music » injecté dans la page YouTube.
+ * The "Add to Music" button injected into the YouTube page.
  *
- * Le script n'appelle jamais le Worker lui-même : il passe par le service
- * worker (chrome.runtime.sendMessage). C'est ce qui évite de réclamer une
- * permission d'hôte sur youtube.com — un script injecté dans la page ne peut
- * pas faire de requête cross-origin sans elle, le service worker si.
+ * This script never calls the Worker itself: it goes through the service
+ * worker (chrome.runtime.sendMessage). That is what avoids requesting a host
+ * permission on youtube.com. A script injected into the page cannot make a
+ * cross-origin request without one; the service worker can.
  */
 
 const BTN_ID = "dmzs-add-btn";
@@ -32,7 +32,7 @@ async function send(btn) {
   try {
     res = await chrome.runtime.sendMessage({ type: "add", url });
   } catch {
-    // Arrive après un rechargement de l'extension : le canal est mort.
+    // Happens after the extension is reloaded: the channel is dead.
     return setState(btn, "err", "Reload the page");
   }
 
@@ -54,12 +54,12 @@ function makeButton() {
 }
 
 /**
- * Où poser le bouton, du plus souhaitable au dernier recours.
+ * Where to put the button, from most desirable to last resort.
  *
- * `#owner` contient l'avatar, le nom de la chaîne et le bouton S'abonner :
- * y ajouter le nôtre le place juste à droite de S'abonner. Les rangées
- * d'actions servent de repli si YouTube change cette structure — ce qui
- * arrive, et c'est pour ça qu'il y a quatre niveaux plutôt qu'un.
+ * `#owner` holds the avatar, the channel name and the Subscribe button, so
+ * appending ours lands it just to the right of Subscribe. The action rows are
+ * the fallback if YouTube changes that structure, which it does. That is why
+ * there are four levels rather than one.
  */
 const HOSTS = [
   "ytd-watch-metadata #owner",
@@ -90,13 +90,13 @@ function ensureButton() {
   const host = findHost();
 
   if (btn?.isConnected) {
-    // Le bouton flottant est un repli : dès que la barre d'actions existe,
-    // on l'y range. YouTube la construit souvent après le premier rendu.
+    // The floating button is a fallback: as soon as the action row exists,
+    // move it there. YouTube often builds that row after the first render.
     if (host && btn.classList.contains("float")) {
       btn.classList.replace("float", "inline");
       host.appendChild(btn);
     }
-    // Nouvelle vidéo : le bouton doit repartir de zéro.
+    // New video: the button has to go back to its initial state.
     if (id !== lastId) {
       lastId = id;
       setState(btn, "", "Add to Music");
@@ -109,14 +109,14 @@ function ensureButton() {
   setState(btn, "", "Add to Music");
   (host || document.body).appendChild(btn);
   lastId = id;
-  // Trace unique : si le bouton reste introuvable, la console dit tout de
-  // suite si le script s'est injecté et où il a réussi à se poser.
-  console.log("[dmzs-music] bouton posé —", host ? host.id || host.tagName : "flottant");
+  // Single trace: if the button cannot be found, the console says right away
+  // whether the script was injected and where it managed to attach.
+  console.log("[dmzs-music] button placed:", host ? host.id || host.tagName : "floating");
 }
 
-/* YouTube est une SPA : ni chargement de page, ni DOM stable. On combine
-   son évènement de navigation et un observateur volontairement paresseux —
-   observer chaque mutation de youtube.com coûterait bien trop cher. */
+/* YouTube is a SPA: no page load, no stable DOM. We combine its navigation
+   event with a deliberately lazy observer, because watching every mutation on
+   youtube.com would cost far too much. */
 let pending = null;
 const schedule = () => {
   clearTimeout(pending);

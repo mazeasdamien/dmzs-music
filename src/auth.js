@@ -1,32 +1,31 @@
 /**
- * Authentification sans mot de passe.
+ * Passwordless authentication.
  *
- * Principe : on ouvre une fois /auth?k=<BOOTSTRAP_KEY> sur un appareil.
- * Le Worker pose alors un cookie signé en HMAC-SHA256, valable un an.
- * Plus rien à taper ensuite, sur cet appareil.
+ * The idea: open /auth?k=<BOOTSTRAP_KEY> once on a device. The Worker then
+ * sets an HMAC-SHA256 signed cookie. Nothing to type again on that device.
  *
- * On ne renvoie JAMAIS de redirection vers une page de connexion : un 401 sec.
- * C'est délibéré — un <audio src> qui reçoit une redirection HTML échoue en
- * silence, sans erreur exploitable. Un 401 est détectable côté client.
+ * A login redirect is NEVER returned, only a flat 401. That is deliberate:
+ * an <audio src> handed an HTML redirect fails silently, with no error worth
+ * catching. A 401 is something the client can actually detect.
  */
 
 const enc = new TextEncoder();
 const YEAR = 365 * 24 * 60 * 60;
 const COOKIE = "dmzs_session";
 
-/** Durée de validité d'une activation d'appareil. */
+/** How long a device activation stays valid. */
 export const SESSION_TTL = 5 * YEAR;
 
 /**
- * Au-delà de cet âge, le cookie est réémis à la volée.
+ * Past this age, the cookie is re-issued on the fly.
  *
- * Nécessaire parce que Chrome plafonne tout cookie à 400 jours, quoi qu'on
- * demande : sans réémission, un appareil Chrome redemanderait une activation
- * au bout de 13 mois. Safari n'applique pas ce plafond aux cookies HttpOnly
- * posés par le serveur, l'iPhone garde donc bien les 5 ans.
+ * Needed because Chrome caps every cookie at 400 days no matter what the
+ * server asks for: without re-issuing, a Chrome device would need activating
+ * again after 13 months. Safari does not apply that cap to server-set
+ * HttpOnly cookies, so the iPhone really does keep the full 5 years.
  *
- * Une réémission au maximum par mois et par appareil : la signature HMAC ne
- * pèse rien, mais inutile de la refaire à chaque requête.
+ * At most one re-issue per month per device: the HMAC signature costs
+ * nothing, but there is no point redoing it on every request.
  */
 export const RENEW_AFTER = 30 * 24 * 60 * 60;
 
@@ -52,18 +51,18 @@ async function hmacKey(secret) {
   );
 }
 
-/** Comparaison à temps constant (évite de fuiter le secret octet par octet). */
+/** Constant-time comparison, so the secret does not leak byte by byte. */
 export function safeEqual(a, b) {
   const ab = enc.encode(a);
   const bb = enc.encode(b);
-  // Longueurs différentes : on compare quand même pour ne pas révéler la taille.
+  // Different lengths: compare anyway, so the size is not revealed either.
   let diff = ab.length ^ bb.length;
   const n = Math.max(ab.length, bb.length);
   for (let i = 0; i < n; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
   return diff === 0;
 }
 
-/** Fabrique un jeton de session `<payload>.<signature>`. */
+/** Builds a `<payload>.<signature>` session token. */
 export async function issueSession(secret, ttl = SESSION_TTL) {
   const payload = { exp: Math.floor(Date.now() / 1000) + ttl };
   const body = b64urlEncode(enc.encode(JSON.stringify(payload)));
@@ -71,7 +70,7 @@ export async function issueSession(secret, ttl = SESSION_TTL) {
   return `${body}.${b64urlEncode(sig)}`;
 }
 
-/** Vérifie un jeton. Renvoie le payload, ou null. */
+/** Verifies a token. Returns the payload, or null. */
 export async function readSession(token, secret) {
   if (!token || typeof token !== "string") return null;
   const dot = token.lastIndexOf(".");
@@ -114,10 +113,10 @@ export function getCookie(request, name = COOKIE) {
 }
 
 export function sessionCookie(token, maxAge = SESSION_TTL) {
-  // HttpOnly : le JS de la page ne peut pas lire le cookie, mais fetch() et
-  // <audio src> l'envoient automatiquement puisqu'on est en same-origin.
-  // SameSite=Lax : suffisant ici, et n'empêche pas la navigation depuis
-  // le lien d'activation.
+  // HttpOnly: page JavaScript cannot read the cookie, but fetch() and
+  // <audio src> send it automatically since everything is same-origin.
+  // SameSite=Lax: enough here, and it does not block navigation coming from
+  // the activation link.
   return [
     `${COOKIE}=${token}`,
     "Path=/",
@@ -133,16 +132,16 @@ export function clearCookie() {
 }
 
 /**
- * Le payload de session porté par la requête, ou null.
+ * The session payload carried by the request, or null.
  *
- * Deux sources : le cookie pour le navigateur, l'en-tête `X-Session` pour
- * l'extension Chrome. Une requête d'extension est cross-site — le cookie,
- * en SameSite=Lax, ne partirait pas.
+ * Two sources: the cookie for the browser, the `X-Session` header for the
+ * Chrome extension. An extension request is cross-site, so a SameSite=Lax
+ * cookie would not be sent.
  *
- * L'en-tête n'ouvre aucune brèche CSRF : un site tiers ne peut pas poser
- * d'en-tête personnalisé sur une requête cross-origin, et aucune règle CORS
- * permissive n'est servie. Seule une extension disposant de la permission
- * d'hôte y arrive, ce qui suppose une installation explicite.
+ * The header opens no CSRF hole: a third-party site cannot set a custom
+ * header on a cross-origin request, and no permissive CORS rule is served.
+ * Only an extension holding the host permission can do it, which requires an
+ * explicit install.
  */
 export async function requestSession(request, env) {
   if (!env.AUTH_SECRET) return null;
@@ -150,15 +149,15 @@ export async function requestSession(request, env) {
   return readSession(token, env.AUTH_SECRET);
 }
 
-/** true si la requête porte une session valide. */
+/** true when the request carries a valid session. */
 export async function isAuthed(request, env) {
   return (await requestSession(request, env)) !== null;
 }
 
 /**
- * Un cookie neuf si la session commence à dater, sinon null.
- * L'appareil reste activé indéfiniment tant qu'il ouvre l'app au moins une
- * fois par an — y compris sur Chrome, qui aurait sinon coupé à 400 jours.
+ * A fresh cookie when the session is getting old, otherwise null.
+ * A device stays activated indefinitely as long as it opens the app at least
+ * once a year, Chrome included, which would otherwise cut off at 400 days.
  */
 export async function renewedCookie(payload, env) {
   const age = SESSION_TTL - (payload.exp - Math.floor(Date.now() / 1000));

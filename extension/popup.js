@@ -12,7 +12,7 @@ function show(which) {
   $("#main").classList.toggle("hide", which !== "main");
 }
 
-/* ── première utilisation ─────────────────────────────────── */
+/* -- first run ---------------------------------------------- */
 async function saveKey() {
   const parsed = parseSetup($("#key").value);
   if (!parsed) return say($("#setupMsg"), "Paste your activation link first.", "err");
@@ -33,7 +33,7 @@ async function saveKey() {
   }
 }
 
-/* ── utilisation normale ──────────────────────────────────── */
+/* -- normal use --------------------------------------------- */
 let currentUrl = null;
 
 async function add() {

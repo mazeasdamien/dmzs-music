@@ -1,9 +1,9 @@
-# Lance le telechargeur en natif, sans Docker.
-# Prerequis : Python 3.12+, ffmpeg, deno sur le PATH.
+# Runs the downloader natively, without Docker.
+# Requires Python 3.12+, ffmpeg and deno on PATH.
 #   npm run dl
 #
-# ASCII uniquement : Windows PowerShell 5.1 lit les fichiers sans BOM en
-# codepage systeme, et des accents ici casseraient l'analyse du script.
+# ASCII only: Windows PowerShell 5.1 reads BOM-less files in the system
+# codepage, and non-ASCII characters here would break parsing.
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -31,8 +31,8 @@ foreach ($line in Get-Content $envFile) {
 }
 if (-not $env:APP_URL) { $env:APP_URL = "https://music.example.com" }
 
-# UTF-8 pour les titres accentues, et sortie non bufferisee pour que les
-# lignes [poll] s'affichent en direct au lieu d'arriver par paquets.
+# UTF-8 for accented titles, and unbuffered output so the [poll] lines show
+# up live instead of arriving in batches.
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUNBUFFERED = "1"
 

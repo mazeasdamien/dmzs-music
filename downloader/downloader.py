@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-Téléchargeur — tourne sur ta machine (PC, Raspberry Pi, NAS…).
+Downloader, runs on your own machine (PC, Raspberry Pi, NAS).
 
-Il vient CHERCHER le travail auprès du Worker : aucun port à ouvrir, aucun
-tunnel, aucune IP fixe. La boucle interroge /internal/next-job, récupère
-l'audio en qualité maximale, le remuxe SANS RÉENCODAGE, puis renvoie le
-fichier au Worker qui le dépose dans R2.
+It PULLS work from the Worker: no port to open, no tunnel, no fixed IP. The
+loop polls /internal/next-job, fetches the audio at the highest quality,
+remuxes it WITHOUT RE-ENCODING, then sends the file back to the Worker, which
+puts it in R2.
 
-C'est ce sens d'appel qui rend le projet gratuit — les Containers Cloudflare
-n'ont aucun palier gratuit — et surtout fiable : la requête vers YouTube part
-d'une IP résidentielle, pas d'une IP de datacenter filtrée par l'anti-bot.
+That direction of call is what makes the project free (Cloudflare Containers
+have no free tier at all) and, more importantly, reliable: the request to
+YouTube leaves from a residential IP rather than a datacenter IP filtered by
+anti-bot systems.
 
-Le remux est une simple bascule de conteneur : les octets audio sont copiés
-tels quels. C'est ce qui permet d'avoir « la meilleure qualité possible »
-sans la perte qu'imposerait une conversion en MP3.
+The remux is just a container swap: the audio bytes are copied as-is. That is
+what gives "the best quality available" without the loss an MP3 conversion
+would impose.
 
-Variables d'environnement :
-  APP_URL        https://music.example.com          (obligatoire)
-  WORKER_TOKEN   le secret partagé avec le Worker    (obligatoire)
-  POLL_INTERVAL  secondes entre deux sondages à vide (défaut 30)
-  YT_COOKIES     cookies Netscape, si l'anti-bot se déclenche
-  YT_PROXY       http://user:pass@hote:port
+Environment variables:
+  APP_URL        https://music.example.com           (required)
+  WORKER_TOKEN   the secret shared with the Worker   (required)
+  POLL_INTERVAL  seconds between empty polls         (default 30)
+  YT_COOKIES     Netscape cookies, if anti-bot kicks in
+  YT_PROXY       http://user:pass@host:port
 """
 
 import base64
@@ -40,9 +41,9 @@ TOKEN = os.environ.get("WORKER_TOKEN", "")
 YT_COOKIES = os.environ.get("YT_COOKIES", "")
 YT_PROXY = os.environ.get("YT_PROXY", "")
 
-# 30 s = 2 880 requêtes/jour, indolore sur les 100 000/jour du palier gratuit.
-# Descendre à 1 s en consommerait 86 400 pour rien : le téléchargement lui-même
-# dure une trentaine de secondes, l'attente ne se voit pas.
+# 30 s is 2,880 requests/day, painless against the free tier's 100,000/day.
+# Dropping to 1 s would burn 86,400 for nothing: the download itself takes
+# about thirty seconds, so the wait is invisible.
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "30"))
 
 COOKIE_FILE = None
@@ -51,10 +52,10 @@ if YT_COOKIES.strip():
     Path(COOKIE_FILE).write_text(YT_COOKIES)
 
 
-# ── communication avec le Worker ────────────────────────────────────────
-# urllib s'annonce par défaut en « Python-urllib/3.x », une signature que le
-# WAF de Cloudflare rejette d'office : erreur 1010, un 403 rendu au bord avant
-# même d'atteindre le Worker. N'importe quel User-Agent explicite passe.
+# -- talking to the Worker -----------------------------------------------
+# urllib announces itself as "Python-urllib/3.x" by default, a signature the
+# Cloudflare WAF rejects outright: error 1010, a 403 served at the edge before
+# the request ever reaches the Worker. Any explicit User-Agent gets through.
 USER_AGENT = "dmzs-music-downloader/1.0"
 
 
@@ -84,8 +85,8 @@ def call_worker(path: str, body: bytes, headers: dict | None = None) -> bool:
 
 def fetch_job() -> dict | None:
     """
-    Réclame le prochain titre. Renvoie None si la file est vide.
-    Lève en cas de problème réseau : l'appelant applique alors un recul.
+    Claims the next track. Returns None when the queue is empty.
+    Raises on network trouble, and the caller then backs off.
     """
     req = urllib.request.Request(
         f"{APP_URL}/internal/next-job",
@@ -111,7 +112,7 @@ def report_fail(track_id: str, message: str) -> None:
                 {"Content-Type": "application/json"})
 
 
-# ── nettoyage des titres ────────────────────────────────────────────────
+# -- title cleanup -------------------------------------------------------
 JUNK = re.compile(
     r"""\s*[\(\[]\s*(?:
         official\s*(?:music\s*)?(?:video|audio|lyric\s*video|visualizer)?
@@ -126,7 +127,7 @@ DASHES = re.compile(r"\s+[-–—]\s+")
 
 
 def split_title(info: dict) -> tuple[str, str]:
-    """Renvoie (titre, artiste) en privilégiant les métadonnées YouTube Music."""
+    """Returns (title, artist), preferring YouTube Music metadata."""
     track = (info.get("track") or "").strip()
     artist = (info.get("artist") or info.get("creator") or "").strip()
     if track:
@@ -145,7 +146,7 @@ def split_title(info: dict) -> tuple[str, str]:
     return clean or raw, uploader
 
 
-# ── ffmpeg ──────────────────────────────────────────────────────────────
+# -- ffmpeg --------------------------------------------------------------
 def run(cmd: list[str]) -> None:
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
@@ -164,11 +165,11 @@ def probe_codec(path: str) -> str:
 
 def remux(src: str, workdir: str) -> tuple[str, str, str]:
     """
-    Choisit le conteneur adapté au codec source, sans jamais réencoder
-    quand c'est évitable. Renvoie (chemin, extension, codec).
+    Picks the container that suits the source codec, never re-encoding when
+    it can be avoided. Returns (path, extension, codec).
 
-    Opus doit finir en .ogg : Safari ne lit Opus QUE dans un conteneur Ogg
-    (depuis iOS 18.4), jamais dans du WebM ni du MP4.
+    Opus has to end up in .ogg: Safari plays Opus ONLY inside an Ogg container
+    (since iOS 18.4), never in WebM or MP4.
     """
     codec = probe_codec(src)
 
@@ -180,8 +181,8 @@ def remux(src: str, workdir: str) -> tuple[str, str, str]:
 
     if codec in ("aac", "alac"):
         out = os.path.join(workdir, "audio.m4a")
-        # faststart déplace l'index en tête du fichier : la lecture démarre
-        # sans avoir à télécharger le fichier entier.
+        # faststart moves the index to the front of the file, so playback
+        # starts without downloading the whole thing first.
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", src,
              "-vn", "-c:a", "copy", "-movflags", "+faststart", out])
         return out, "m4a", codec
@@ -192,8 +193,8 @@ def remux(src: str, workdir: str) -> tuple[str, str, str]:
              "-vn", "-c:a", "copy", out])
         return out, "mp3", "mp3"
 
-    # Codec inattendu (vorbis, ec-3…) : là seulement on réencode, en AAC,
-    # pour garantir la lecture sur iPhone.
+    # Unexpected codec (vorbis, ec-3 and friends): only here do we re-encode,
+    # to AAC, to guarantee playback on iPhone.
     out = os.path.join(workdir, "audio.m4a")
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", src,
          "-vn", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out])
@@ -201,7 +202,7 @@ def remux(src: str, workdir: str) -> tuple[str, str, str]:
 
 
 def square_thumbnail(url: str, workdir: str) -> str | None:
-    """Télécharge la vignette et la recadre en carré centré."""
+    """Downloads the thumbnail and crops it to a centred square."""
     if not url:
         return None
     raw = os.path.join(workdir, "thumb.in")
@@ -219,7 +220,7 @@ def square_thumbnail(url: str, workdir: str) -> str | None:
         return None
 
 
-# ── cœur du travail ─────────────────────────────────────────────────────
+# -- the actual work -----------------------------------------------------
 def process(job: dict) -> None:
     import yt_dlp
 
@@ -243,9 +244,9 @@ def process(job: dict) -> None:
             done = d.get("downloaded_bytes") or 0
             pct = 8 + (done / total * 74) if total else 40
 
-            # Le premier appel porte déjà les métadonnées : le titre s'affiche
-            # sur le téléphone au bout d'une seconde ou deux, sans avoir eu à
-            # interroger YouTube une deuxième fois.
+            # The first call already carries the metadata, so the title shows
+            # up on the phone after a second or two, with no second round trip
+            # to YouTube.
             extra = {}
             if not announced[0]:
                 nfo = d.get("info_dict") or {}
@@ -257,8 +258,8 @@ def process(job: dict) -> None:
             report(track_id, pct, "Fetching audio…", **extra)
 
         opts = {
-            # Opus en priorité (~160 kb/s, meilleur que l'AAC 128 de YouTube),
-            # puis m4a, puis n'importe quoi d'audible.
+            # Opus first (~160 kb/s, better than YouTube's 128 kb/s AAC), then
+            # m4a, then anything audible.
             "format": "bestaudio[acodec^=opus]/bestaudio[ext=m4a]/bestaudio/best",
             "outtmpl": os.path.join(workdir, "src.%(ext)s"),
             "noplaylist": True,
@@ -267,7 +268,7 @@ def process(job: dict) -> None:
             "progress_hooks": [hook],
             "retries": 3,
             "fragment_retries": 3,
-            # On lève le pied : marteler l'API accélère le filtrage anti-bot.
+            # Easing off: hammering the API brings anti-bot filtering on faster.
             "sleep_interval_requests": 1,
         }
         if COOKIE_FILE:
@@ -277,8 +278,8 @@ def process(job: dict) -> None:
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             report(track_id, 4, "Analyzing…")
-            # Un seul passage : extraction et téléchargement d'un coup.
-            # Deux appels séparés doubleraient l'exposition au filtrage anti-bot.
+            # A single pass: extraction and download in one go. Two separate
+            # calls would double the exposure to anti-bot filtering.
             info = ydl.extract_info(url, download=True)
             src = ydl.prepare_filename(info)
 
@@ -286,7 +287,7 @@ def process(job: dict) -> None:
         duration = int(info.get("duration") or 0)
 
         if not os.path.exists(src):
-            # yt-dlp a pu changer l'extension en cours de route.
+            # yt-dlp may have changed the extension along the way.
             candidates = [p for p in Path(workdir).glob("src.*")]
             if not candidates:
                 raise RuntimeError("Downloaded file not found")
@@ -301,7 +302,7 @@ def process(job: dict) -> None:
         except (TypeError, ValueError):
             bitrate = 0
 
-        # Vignette (facultative : son échec ne doit pas faire rater le titre).
+        # Artwork (optional: its failure must not sink the whole track).
         report(track_id, 90, "Artwork…")
         art = None
         for candidate in (
@@ -331,8 +332,8 @@ def process(job: dict) -> None:
         with open(audio_path, "rb") as f:
             payload = f.read()
 
-        # ensure_ascii=True (défaut) : les accents sortent en \uXXXX, donc le
-        # base64 reste pur ASCII et traverse l'en-tête HTTP sans dommage.
+        # ensure_ascii=True (the default) turns accents into \uXXXX, so the
+        # base64 stays pure ASCII and survives the HTTP header intact.
         header = base64.b64encode(json.dumps(meta).encode("ascii")).decode("ascii")
         ok = call_worker(
             f"/internal/complete?id={track_id}",
@@ -346,7 +347,7 @@ def process(job: dict) -> None:
 
 
 def handle(job: dict) -> None:
-    """Traite un job. Un échec est signalé au Worker, jamais fatal pour la boucle."""
+    """Handles one job. A failure is reported to the Worker, never fatal to the loop."""
     try:
         process(job)
     except Exception as e:  # noqa: BLE001
@@ -361,7 +362,7 @@ def handle(job: dict) -> None:
         report_fail(job["id"], msg[:400])
 
 
-# ── boucle de sondage ───────────────────────────────────────────────────
+# -- polling loop --------------------------------------------------------
 def main() -> None:
     if not APP_URL or not TOKEN:
         raise SystemExit(
@@ -380,8 +381,8 @@ def main() -> None:
             errors = 0
         except Exception as e:  # noqa: BLE001
             errors += 1
-            # Worker injoignable (coupure réseau, déploiement en cours) : on
-            # recule au lieu de marteler, jusqu'à 5 minutes entre deux essais.
+            # Worker unreachable (network cut, deploy in progress): back off
+            # instead of hammering, up to 5 minutes between attempts.
             delay = min(POLL_INTERVAL * 2 ** min(errors, 4), 300)
             print(f"[poll] unreachable ({e}) — retrying in {delay:.0f} s")
             time.sleep(delay)
@@ -391,12 +392,12 @@ def main() -> None:
             idle = False
             print(f"[poll] job received: {job['id']}")
             handle(job)
-            # On repart aussitôt : une file de plusieurs titres se vide d'affilée
-            # sans attendre un intervalle entre chaque.
+            # Straight back round: a queue of several tracks drains back to
+            # back, without waiting an interval between each.
             continue
 
         if not idle:
-            # Une seule ligne au passage à vide : pas de log toutes les 30 s.
+            # One line when going idle, rather than a log every 30 s.
             print("[poll] queue empty, waiting")
             idle = True
         time.sleep(POLL_INTERVAL)

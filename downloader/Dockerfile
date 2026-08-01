@@ -1,23 +1,23 @@
-# Image du téléchargeur — tourne sur ta machine (PC, Raspberry Pi, NAS…).
+# Downloader image, meant to run on your own machine (PC, Raspberry Pi, NAS).
 #
 #   docker build -t dmzs-dl ./downloader
 #   docker run -d --restart unless-stopped \
 #     -e APP_URL=https://music.example.com -e WORKER_TOKEN=... dmzs-dl
 #
-# Aucun port publié, aucune entrée : le conteneur ne fait que des requêtes
-# SORTANTES vers le Worker, qu'il interroge pour savoir s'il y a du travail.
-# Rien à ouvrir sur la box, rien à exposer.
+# No published port and no inbound traffic: the container only makes OUTBOUND
+# requests to the Worker, asking whether there is any work. Nothing to open on
+# the router, nothing to expose.
 #
-# C'est aussi ce qui rend le téléchargement fiable : la requête vers YouTube
-# part de ton IP résidentielle. Les IP de datacenter — Cloudflare, GCP, Azure —
-# sont la cible directe du filtrage anti-bot.
+# It is also what makes downloading reliable: the request to YouTube leaves
+# from your residential IP. Datacenter IPs (Cloudflare, GCP, Azure) are the
+# direct target of anti-bot filtering.
 
 FROM python:3.12-slim
 
-# ffmpeg  : remux (copie de flux, sans réencodage) + recadrage de la vignette
-# deno    : OBLIGATOIRE depuis yt-dlp 2025.11.12 — c'est lui qui résout les
-#           défis JavaScript de YouTube. Sans runtime JS, yt-dlp perd
-#           silencieusement la moitié des formats audio.
+# ffmpeg : remux (stream copy, no re-encoding) plus thumbnail cropping
+# deno   : REQUIRED since yt-dlp 2025.11.12, it is what solves YouTube's
+#          JavaScript challenges. Without a JS runtime, yt-dlp silently loses
+#          half of the audio formats.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -26,7 +26,7 @@ ENV DENO_INSTALL=/usr/local
 RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path \
     && deno --version
 
-# [default] embarque yt-dlp-ejs, le pont entre yt-dlp et le runtime JS.
+# [default] pulls in yt-dlp-ejs, the bridge between yt-dlp and the JS runtime.
 RUN pip install --no-cache-dir --upgrade "yt-dlp[default]"
 
 WORKDIR /app

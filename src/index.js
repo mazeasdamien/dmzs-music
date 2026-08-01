@@ -13,11 +13,10 @@ export { videoIdFrom, parseRange };
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
-// Un job réservé mais sans signe de vie depuis ce délai est remis en file.
-// Couvre la panne de courant, le `docker stop` en plein téléchargement et le
-// portable qu'on referme — sans quoi le titre resterait bloqué en
-// « downloading » pour toujours. Chaque rapport d'avancement rafraîchit le bail,
-// donc un long téléchargement ne se fait jamais préempter.
+// A job claimed but silent for this long goes back into the queue. Covers a
+// power cut, a `docker stop` mid-download and a laptop lid being closed,
+// without which the track would stay stuck in 'downloading' forever. Every
+// progress report refreshes the lease, so a long download is never preempted.
 const LEASE_MS = 15 * 60 * 1000;
 
 const MIME = {
@@ -30,10 +29,10 @@ const json = (data, status = 200, extra = {}) =>
   new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...extra } });
 
 /* ────────────────────────────────────────────────────────────────
-   Diffusion depuis R2, avec gestion correcte des requêtes Range.
+   Serving from R2, with correct Range handling.
 
-   Indispensable : Safari envoie systématiquement un `Range: bytes=0-1`
-   avant de lire un <audio>. Répondre 200 à cette sonde casse la lecture.
+   Essential: Safari always sends a `Range: bytes=0-1` before reading an
+   <audio>. Answering 200 to that probe breaks playback.
    ──────────────────────────────────────────────────────────────── */
 async function serveObject(request, env, key, contentType) {
   const head = await env.MEDIA.head(key);
@@ -95,11 +94,11 @@ async function serveObject(request, env, key, contentType) {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Endpoints internes — appelés par le téléchargeur, jamais par le navigateur.
+   Internal endpoints, called by the downloader and never by the browser.
 
-   Le téléchargeur tourne sur une machine perso, derrière une box : le Worker
-   ne peut pas l'appeler. C'est donc lui qui vient chercher le travail
-   (`/internal/next-job`). Aucun port à ouvrir, aucun tunnel, aucune IP fixe.
+   The downloader runs on a personal machine behind a home router, so the
+   Worker cannot call it. It is the downloader that comes and fetches work
+   (`/internal/next-job`). No port to open, no tunnel, no fixed IP.
    ──────────────────────────────────────────────────────────────── */
 function internalAuthOk(request, env) {
   const h = request.headers.get("Authorization") || "";
@@ -113,11 +112,11 @@ async function handleInternal(request, env, path) {
   }
   const url = new URL(request.url);
 
-  // Réclame le prochain titre à traiter. Renvoie {} quand la file est vide.
+  // Claims the next track to process. Returns {} when the queue is empty.
   if (path === "/internal/next-job" && request.method === "GET") {
     const now = Date.now();
 
-    // Bail expiré : le téléchargeur précédent n'a plus donné signe de vie.
+    // Lease expired: the previous downloader stopped reporting in.
     await env.DB.prepare(
       `UPDATE tracks SET status = 'pending', claimed_at = NULL, progress = 0,
                          stage = 'Waiting for the downloader…'
@@ -131,9 +130,9 @@ async function handleInternal(request, env, path) {
     ).first();
     if (!row) return json({});
 
-    // Le garde `status = 'pending'` rend la réservation atomique : si deux
-    // téléchargeurs sondent en même temps, le second voit changes = 0 et
-    // repart les mains vides plutôt que de traiter le titre en double.
+    // The `status = 'pending'` guard makes claiming atomic: if two downloaders
+    // poll at the same time, the second one sees changes = 0 and leaves empty
+    // handed rather than processing the track twice.
     const claim = await env.DB.prepare(
       `UPDATE tracks SET status = 'downloading', claimed_at = ?, progress = 0,
                          stage = 'Analyzing…', error = NULL
@@ -147,12 +146,12 @@ async function handleInternal(request, env, path) {
     return json({ id: row.id, url: `https://www.youtube.com/watch?v=${row.id}` });
   }
 
-  // Avancement + métadonnées découvertes en cours de route.
+  // Progress, plus metadata discovered along the way.
   if (path === "/internal/progress" && request.method === "POST") {
     const b = await request.json();
     if (!b.id) return json({ error: "missing id" }, 400);
 
-    // claimed_at sert de battement de cœur : tant que ça avance, le bail court.
+    // claimed_at doubles as a heartbeat: while progress happens, the lease runs.
     const sets = ["status = ?", "progress = ?", "stage = ?", "claimed_at = ?"];
     const vals = [
       b.status || "downloading",
@@ -181,7 +180,7 @@ async function handleInternal(request, env, path) {
     return json({ ok: true });
   }
 
-  // Vignette carrée (JPEG brut dans le corps).
+  // Square artwork (raw JPEG in the body).
   if (path === "/internal/art" && request.method === "POST") {
     const id = url.searchParams.get("id");
     if (!id) return json({ error: "missing id" }, 400);
@@ -191,7 +190,7 @@ async function handleInternal(request, env, path) {
     return json({ ok: true });
   }
 
-  // Fichier audio final (octets bruts) + métadonnées en en-tête.
+  // Final audio file (raw bytes) plus metadata in a header.
   if (path === "/internal/complete" && request.method === "POST") {
     const id = url.searchParams.get("id");
     if (!id) return json({ error: "missing id" }, 400);
@@ -200,8 +199,8 @@ async function handleInternal(request, env, path) {
     try {
       const raw = request.headers.get("X-Meta");
       if (raw) {
-        // atob() rend une chaîne latin1 : il faut repasser par UTF-8,
-        // sinon « Café Tacvba » ressort en « CafÃ© Tacvba ».
+        // atob() returns a latin1 string, so it has to go back through UTF-8,
+        // otherwise "Café Tacvba" comes out as "CafÃ© Tacvba".
         const bytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
         meta = JSON.parse(new TextDecoder().decode(bytes));
       }
@@ -252,7 +251,7 @@ async function handleInternal(request, env, path) {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   API publique (derrière le cookie)
+   Public API (behind the cookie)
    ──────────────────────────────────────────────────────────────── */
 async function handleApi(request, env, path) {
   // GET /api/tracks
@@ -286,9 +285,9 @@ async function handleApi(request, env, path) {
       return json({ id, duplicate: true }, 200);
     }
 
-    // Le titre est simplement déposé en file. Le téléchargeur le réclamera à
-    // son prochain sondage : rien à réveiller ici, et l'ajout depuis le
-    // téléphone reste instantané même si la machine est éteinte.
+    // The track is simply queued. The downloader will claim it on its next
+    // poll: nothing to wake up here, and adding from the phone stays instant
+    // even when the machine is switched off.
     const STAGE = "Waiting for the downloader…";
 
     if (!existing) {
@@ -299,7 +298,7 @@ async function handleApi(request, env, path) {
         .bind(id, "Loading…", "", STAGE, Date.now())
         .run();
     } else {
-      // Relance d'un titre en erreur.
+      // Retrying a track that failed.
       await env.DB.prepare(
         `UPDATE tracks SET status='pending', progress=0, stage=?,
                            claimed_at=NULL, error=NULL
@@ -312,9 +311,9 @@ async function handleApi(request, env, path) {
     return json({ id }, 202);
   }
 
-  // POST /api/tracks/:id/play — une écoute de plus.
-  // Le client n'appelle qu'après 20 s de lecture effective : sauter dix titres
-  // ne doit pas les compter comme dix écoutes.
+  // POST /api/tracks/:id/play, one more play.
+  // The client only calls this after 20 s of actual playback: skipping through
+  // ten tracks must not count as ten plays.
   const played = path.match(/^\/api\/tracks\/([\w-]{11})\/play$/);
   if (played && request.method === "POST") {
     const r = await env.DB.prepare(
@@ -340,24 +339,24 @@ async function handleApi(request, env, path) {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Entrée
+   Entry point
    ──────────────────────────────────────────────────────────────── */
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 1. Endpoints internes : jeton porteur, pas de cookie.
+    // 1. Internal endpoints: bearer token, no cookie.
     if (path.startsWith("/internal/")) {
       return handleInternal(request, env, path);
     }
 
-    // 2. Activation d'un appareil : /auth?k=<BOOTSTRAP_KEY>
+    // 2. Activating a device: /auth?k=<BOOTSTRAP_KEY>
     if (path === "/auth") {
       const k = url.searchParams.get("k") || "";
       if (!env.BOOTSTRAP_KEY || !safeEqual(k, env.BOOTSTRAP_KEY)) {
-        // Même réponse qu'une page protégée : on ne confirme pas
-        // l'existence de la route à un visiteur au hasard.
+        // Same response as any protected page: the route's existence is not
+        // confirmed to a random visitor.
         return denied();
       }
       const token = await issueSession(env.AUTH_SECRET);
@@ -367,9 +366,9 @@ export default {
       });
     }
 
-    // 2 bis. Même activation, mais pour un client sans cookie (l'extension
-    // Chrome) : on renvoie le jeton en clair, à ranger côté client et à
-    // présenter ensuite dans l'en-tête X-Session.
+    // 2b. Same activation, but for a client with no cookie (the Chrome
+    // extension): the token is returned in the clear, to be stored client
+    // side and then presented in the X-Session header.
     if (path === "/auth/token") {
       const k = url.searchParams.get("k") || "";
       if (!env.BOOTSTRAP_KEY || !safeEqual(k, env.BOOTSTRAP_KEY)) {
@@ -386,16 +385,16 @@ export default {
       });
     }
 
-    // 3. Tout le reste exige une session valide.
+    // 3. Everything else requires a valid session.
     const session = await requestSession(request, env);
     if (!session) {
       return denied();
     }
 
     if (path.startsWith("/api/")) {
-      // Seule route où l'on prolonge l'activation : l'app l'appelle à chaque
-      // ouverture, et on ne touche pas aux réponses 206 de /media/, où
-      // réécrire la réponse pour un en-tête serait un risque inutile.
+      // The only route where the activation is extended: the app calls it on
+      // every open, and this leaves /media/ 206 responses alone, where
+      // rewriting a response just for one header would be a needless risk.
       const res = await handleApi(request, env, path);
       const fresh = await renewedCookie(session, env);
       if (!fresh) return res;
@@ -418,14 +417,14 @@ export default {
       return serveObject(request, env, `art/${art[1]}.jpg`, "image/jpeg");
     }
 
-    // 4. Sinon : fichiers statiques (la PWA).
+    // 4. Otherwise: static files (the PWA).
     return env.ASSETS.fetch(request);
   },
 };
 
 function denied() {
-  // 401 franc, jamais de redirection : un <audio> ou un fetch() reçoit une
-  // erreur exploitable au lieu d'une page HTML déguisée en fichier audio.
+  // A flat 401, never a redirect: an <audio> or a fetch() then gets an error
+  // it can act on, instead of an HTML page dressed up as an audio file.
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

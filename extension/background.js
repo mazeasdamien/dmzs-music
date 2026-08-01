@@ -1,7 +1,7 @@
 /**
- * Service worker : le clic droit « Add to Music ».
- * Le popup gère le cas du clic sur l'icône ; ici on couvre l'ajout en un
- * geste, sans ouvrir de fenêtre.
+ * Service worker: the "Add to Music" right-click entry.
+ * The popup covers clicking the toolbar icon; this file covers adding in a
+ * single gesture, without opening any window.
  */
 import { addTrack, videoIdFrom } from "./shared.js";
 
@@ -9,9 +9,9 @@ const YT = ["*://*.youtube.com/*", "*://youtu.be/*"];
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    // Deux entrées plutôt qu'une : sur une page YouTube on vise la page
-    // courante, ailleurs on vise le lien survolé. Une seule entrée cumulant
-    // les deux filtres exigerait que les deux correspondent en même temps.
+    // Two entries rather than one: on a YouTube page we target the current
+    // page, elsewhere we target the hovered link. A single entry carrying
+    // both filters would require both to match at the same time.
     chrome.contextMenus.create({
       id: "add-page",
       title: "Add to Music",
@@ -31,14 +31,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   send(info.linkUrl || info.pageUrl || tab?.url);
 });
 
-/* Le bouton injecté dans la page YouTube passe par ici : un script de contenu
-   n'a pas la permission d'hôte nécessaire pour appeler le Worker lui-même. */
+/* The button injected into the YouTube page goes through here: a content
+   script does not hold the host permission needed to call the Worker itself. */
 chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   if (msg?.type !== "add") return false;
   addTrack(msg.url)
     .then((data) => respond({ ok: true, duplicate: Boolean(data.duplicate) }))
     .catch((e) => respond({ ok: false, error: e.message }));
-  // true : la réponse arrive plus tard, Chrome doit garder le canal ouvert.
+  // true: the answer comes later, so Chrome must keep the channel open.
   return true;
 });
 
@@ -48,8 +48,8 @@ async function send(url) {
     const data = await addTrack(url);
     flash(data.duplicate ? "=" : "✓", "#f0a04b");
   } catch {
-    // Le détail de l'erreur est affiché par le popup ; ici, une pastille
-    // rouge suffit à dire « ça n'est pas parti ».
+    // The popup shows the error detail; here a red badge is enough to say
+    // "it did not go through".
     flash("!", "#f2615c");
   }
 }
@@ -57,7 +57,7 @@ async function send(url) {
 function flash(text, color) {
   chrome.action.setBadgeText({ text });
   chrome.action.setBadgeBackgroundColor({ color });
-  // Un service worker MV3 peut être arrêté avant l'échéance : la pastille
-  // resterait alors affichée. Sans conséquence, elle est écrasée au clic suivant.
+  // An MV3 service worker can be stopped before this fires, leaving the
+  // badge on screen. Harmless: the next click overwrites it.
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2500);
 }

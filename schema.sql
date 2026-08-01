@@ -1,24 +1,24 @@
--- dmzs-music — schéma D1
--- L'id est l'identifiant de la vidéo YouTube : unique par nature,
--- ce qui rend la déduplication gratuite.
+-- dmzs-music, D1 schema
+-- The id is the YouTube video id: unique by nature, which makes
+-- deduplication free.
 
 CREATE TABLE IF NOT EXISTS tracks (
-  id          TEXT PRIMARY KEY,              -- id vidéo YouTube (11 car.)
+  id          TEXT PRIMARY KEY,              -- YouTube video id (11 chars)
   title       TEXT NOT NULL,
   artist      TEXT NOT NULL DEFAULT '',
-  duration    INTEGER NOT NULL DEFAULT 0,    -- secondes
-  size        INTEGER NOT NULL DEFAULT 0,    -- octets du fichier audio
+  duration    INTEGER NOT NULL DEFAULT 0,    -- seconds
+  size        INTEGER NOT NULL DEFAULT 0,    -- audio file size in bytes
   codec       TEXT    NOT NULL DEFAULT '',   -- opus | aac
   ext         TEXT    NOT NULL DEFAULT '',   -- ogg  | m4a
   bitrate     INTEGER NOT NULL DEFAULT 0,    -- kb/s
   status      TEXT    NOT NULL DEFAULT 'pending',
                                              -- pending | downloading | ready | error
   progress    INTEGER NOT NULL DEFAULT 0,    -- 0-100
-  stage       TEXT    NOT NULL DEFAULT '',   -- libellé affiché pendant le travail
+  stage       TEXT    NOT NULL DEFAULT '',   -- label shown while working
   error       TEXT,
   created_at  INTEGER NOT NULL,
-  claimed_at  INTEGER,                       -- ms ; bail du téléchargeur, NULL si libre
-  plays       INTEGER NOT NULL DEFAULT 0     -- nombre d'écoutes, tous appareils
+  claimed_at  INTEGER,                       -- ms; downloader lease, NULL when free
+  plays       INTEGER NOT NULL DEFAULT 0     -- play count, across all devices
 );
 
 CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);

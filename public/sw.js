@@ -1,14 +1,14 @@
 /**
- * Service worker — volontairement limité.
+ * Service worker, deliberately limited.
  *
- * ⚠️ Il n'intercepte JAMAIS /media/. C'est délibéré.
- * Safari envoie toujours un « Range: bytes=0-1 » avant de lire un <audio>.
- * Un service worker qui répond 200 à cette sonde casse la lecture en silence.
- * L'audio hors-ligne passe donc par l'API Cache lue depuis la page, puis par
- * une URL blob: — que Safari gère nativement, sans interception fetch.
+ * WARNING: it NEVER intercepts /media/. That is on purpose.
+ * Safari always sends a "Range: bytes=0-1" before reading an <audio>, and a
+ * service worker answering 200 to that probe breaks playback silently.
+ * Offline audio therefore goes through the Cache API, read from the page, and
+ * then a blob: URL, which Safari handles natively with no fetch interception.
  *
- * Ici on ne s'occupe que de la coque de l'app et des pochettes (des images,
- * qui n'utilisent pas de requêtes Range).
+ * All this file deals with is the app shell and the artwork (images, which do
+ * not use Range requests).
  */
 
 const SHELL = "dmzs-shell-v3";
@@ -48,7 +48,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Zones interdites : on laisse le réseau faire son travail.
+  // Off-limits paths: let the network do its job.
   if (
     url.pathname.startsWith("/media/") ||
     url.pathname.startsWith("/api/") ||
@@ -59,7 +59,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pochettes : cache d'abord, réseau ensuite.
+  // Artwork: cache first, network second.
   if (url.pathname.startsWith("/art/")) {
     event.respondWith(
       caches.open(ART).then(async (cache) => {
@@ -77,8 +77,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation : réseau d'abord (pour récupérer les mises à jour), repli
-  // sur la coque en cache quand on est hors ligne.
+  // Navigation: network first, so updates come through, falling back to the
+  // cached shell when offline.
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -91,7 +91,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Reste des fichiers statiques : cache d'abord.
+  // Every other static file: cache first.
   event.respondWith(
     caches.match(req).then(
       (hit) =>

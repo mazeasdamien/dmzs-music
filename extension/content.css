@@ -1,6 +1,6 @@
-/* Forme des pilules d'action de YouTube (36 px, coins ronds), couleur de l'app.
-   Les valeurs sont figées plutôt qu'héritées : les variables de thème de
-   YouTube changent de nom régulièrement, une couleur en dur ne casse jamais. */
+/* Shaped like YouTube's action pills (36 px, fully rounded), in the app's
+   colour. The values are hard-coded rather than inherited: YouTube's theme
+   variables get renamed regularly, a literal colour never breaks. */
 #dmzs-add-btn {
   display: inline-flex;
   align-items: center;
@@ -22,8 +22,8 @@
 #dmzs-add-btn:hover { opacity: .88 }
 #dmzs-add-btn:disabled { cursor: default }
 
-/* align-self : #owner est un conteneur flex étiré en hauteur ; sans ça, le
-   bouton s'étirerait au lieu de rester sur ses 36 px. */
+/* align-self: #owner is a flex container stretched vertically. Without this
+   the button would stretch instead of staying at its 36 px. */
 #dmzs-add-btn.inline { margin-left: 12px; align-self: center; flex: none }
 #dmzs-add-btn.float {
   position: fixed;

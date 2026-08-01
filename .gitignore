@@ -1,15 +1,15 @@
-# dépendances
+# dependencies
 node_modules/
 downloader/.venv/
 
-# secrets — ne doivent JAMAIS partir dans un dépôt
+# secrets, these must NEVER end up in a repository
 .dev.vars
 .dev.vars.*
 .env
 downloader/.env
 cookies.txt
 
-# artefacts
+# build and runtime artefacts
 .wrangler/
 __pycache__/
 *.pyc

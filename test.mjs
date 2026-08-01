@@ -1,6 +1,6 @@
 /**
- * Tests des parties critiques : signature de session et analyse des Range.
- * Lancer : node test.mjs
+ * Tests for the critical parts: session signing and Range parsing.
+ * Run with: node test.mjs
  */
 import {
   issueSession,
@@ -55,7 +55,7 @@ eq(parseRange("bytes=0-1, 5-6", S), null, "multi-intervalles non supporté → 4
 eq(parseRange("", S), null, "en-tête vide");
 eq(parseRange(null, S), null, "en-tête absent");
 
-// Cohérence Content-Length : la longueur annoncée doit correspondre aux octets servis.
+// Content-Length consistency: the advertised length must match the bytes served.
 for (const h of ["bytes=0-1", "bytes=0-", "bytes=-300", "bytes=200-499"]) {
   const r = parseRange(h, S);
   ok(r && r.end - r.start + 1 > 0 && r.end < S, `longueur cohérente pour ${h}`);
@@ -77,8 +77,8 @@ ok((await readSession("", SECRET)) === null, "jeton vide → rejet");
 ok((await readSession(null, SECRET)) === null, "jeton null → rejet");
 ok((await readSession("....", SECRET)) === null, "jeton absurde → rejet");
 
-// Un attaquant ne doit pas pouvoir forger une expiration lointaine :
-// changer le payload invalide la signature.
+// An attacker must not be able to forge a distant expiry: changing the
+// payload invalidates the signature.
 const forged = Buffer.from(JSON.stringify({ exp: 9999999999 })).toString("base64url");
 ok((await readSession(`${forged}.${sig}`, SECRET)) === null, "expiration forgée → rejet");
 
@@ -112,9 +112,9 @@ eq(getCookie(fakeReq("dmzs_session_autre=abc")), null, "pas de correspondance pa
 eq(getCookie(fakeReq(null)), null, "aucun cookie");
 
 console.log("\n── session par en-tête (extension Chrome) ───");
-// L'extension ne peut pas envoyer le cookie (cross-site, SameSite=Lax) :
-// elle présente le même jeton signé dans X-Session. Le chemin doit être
-// exactement aussi strict que celui du cookie.
+// The extension cannot send the cookie (cross-site, SameSite=Lax), so it
+// presents the same signed token in X-Session. That path must be exactly as
+// strict as the cookie one.
 const req2 = (cookie, header) => ({
   headers: {
     get: (h) => (h === "Cookie" ? cookie : h === "X-Session" ? header : null),

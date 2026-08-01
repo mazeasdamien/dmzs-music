@@ -1,10 +1,10 @@
 /**
- * Génère les trois secrets et affiche les commandes à lancer.
+ * Generates the three secrets and prints the commands to run.
  *   node scripts/secrets.mjs
  *
- * Garde la sortie : le lien d'activation contient BOOTSTRAP_KEY, et c'est
- * lui qui ouvre l'accès à l'app. Tout le monde peut deviner l'URL du site,
- * personne ne devinera cette clé.
+ * Keep the output: the activation link contains BOOTSTRAP_KEY, and that link
+ * is what grants access to the app. Anyone can guess the site URL, nobody
+ * will guess this key.
  */
 import { randomBytes } from "node:crypto";
 

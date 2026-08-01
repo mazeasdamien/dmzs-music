@@ -1,6 +1,6 @@
-/** Fonctions pures — sans dépendance au runtime Workers, donc testables. */
+/** Pure functions, with no dependency on the Workers runtime, so they stay testable. */
 
-/** Extrait l'identifiant d'une vidéo depuis à peu près n'importe quelle forme d'URL. */
+/** Extracts a video id from just about any URL shape. */
 export function videoIdFrom(input) {
   if (!input || typeof input !== "string") return null;
   const trimmed = input.trim();
@@ -12,11 +12,11 @@ export function videoIdFrom(input) {
 }
 
 /**
- * Analyse un en-tête Range. Renvoie {start, end} ou null si non satisfiable.
+ * Parses a Range header. Returns {start, end}, or null if unsatisfiable.
  *
- * Extrait pour être testable isolément : c'est le bout de code qui casse
- * silencieusement la lecture audio sur iPhone quand il est faux. Safari sonde
- * chaque <audio> avec « Range: bytes=0-1 » avant de lire quoi que ce soit.
+ * Pulled out so it can be tested on its own: this is the piece that silently
+ * breaks audio playback on iPhone when it is wrong. Safari probes every
+ * <audio> with "Range: bytes=0-1" before reading anything at all.
  */
 export function parseRange(header, size) {
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(header || "").trim());
@@ -25,7 +25,7 @@ export function parseRange(header, size) {
   let start;
   let end;
   if (m[1] === "") {
-    // Forme suffixe : « bytes=-500 » = les 500 derniers octets.
+    // Suffix form: "bytes=-500" means the last 500 bytes.
     const n = parseInt(m[2], 10);
     if (!Number.isFinite(n) || n <= 0) return null;
     start = Math.max(0, size - n);

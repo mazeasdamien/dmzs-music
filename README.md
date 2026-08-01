@@ -2,9 +2,28 @@
 
 A personal music library that runs on Cloudflare's free tier. Paste a YouTube
 link, the audio is fetched at the best available quality, stored in the cloud,
-and plays from a PWA pinned to your iPhone home screen — online or offline.
+and plays from a PWA pinned to your iPhone home screen, online or offline.
 
 **Running cost: $0.** Everything fits inside Cloudflare's free allowances.
+
+---
+
+## Legal and licence, before anything else
+
+**Licence: [MIT](LICENSE).** Free to use, copy, modify and redistribute, as
+long as the copyright notice stays in place. No warranty of any kind.
+
+**Legal.** yt-dlp is legal software: the DMCA takedown filed by the RIAA in 2020
+was reversed by GitHub after the EFF intervened. Downloading from YouTube does
+however violate its terms of service, and in France the private-copy exception
+was narrowed by the CJEU ruling of 16 April 2026 concerning offline downloads
+from streaming platforms.
+
+This project is published for personal and educational use. You are responsible
+for what you do with it, and for the rights attached to the content you
+download. This is not legal advice.
+
+---
 
 <p align="center">
   <img src="docs/library.png" alt="Library view on iPhone" width="45%">
@@ -12,7 +31,7 @@ and plays from a PWA pinned to your iPhone home screen — online or offline.
 </p>
 
 The Chrome extension adds an **Add to Music** button straight into YouTube's
-action row, next to *Subscribe* — one click and the track is queued:
+action row, next to *Subscribe*. One click and the track is queued:
 
 <p align="center">
   <img src="docs/extension-button.png" alt="Add to Music button on a YouTube page" width="90%">
@@ -29,7 +48,7 @@ iPhone ◄── Worker ◄── serves audio from R2 (with Range support)
 | Piece | Role |
 |---|---|
 | Worker | API, auth, audio delivery, static files |
-| Downloader | yt-dlp + ffmpeg + Deno, on your machine — the only part that runs binaries |
+| Downloader | yt-dlp + ffmpeg + Deno, on your machine, the only part that runs binaries |
 | R2 | audio files and artwork (10 GB free ≈ 1,500 tracks) |
 | D1 | library metadata |
 
@@ -42,7 +61,7 @@ once.
 
 A Worker **cannot call** a machine sitting behind a home router: no fixed IP, no
 open port. Rather than punching a tunnel through, the direction of the call is
-reversed — your machine asks the Worker for work.
+reversed: your machine asks the Worker for work.
 
 ```
 Push    Worker ──► Downloader    needs a tunnel, a reachable IP, an open port
@@ -54,12 +73,12 @@ Pull    Worker ◄── Downloader    no inbound, nothing exposed   ← what th
    Here, nothing runs on Cloudflare.
 2. **It works.** Containers egress from Cloudflare IPs (AS13335), precisely what
    YouTube's anti-bot filtering targets. Your home connection has a residential
-   IP — exactly what gets through where a datacenter IP does not. The problem
+   IP, exactly what gets through where a datacenter IP does not. The problem
    isn't worked around, it stops existing.
 
 **The trade-off:** your machine has to be running for a track to download. You
 paste the link from your phone anywhere, it sits in the queue and starts on the
-next boot. Playback doesn't depend on it — files live in R2 and are served by
+next boot. Playback doesn't depend on it: files live in R2 and are served by
 the Worker.
 
 A Raspberry Pi left on removes the constraint entirely for about 3 W.
@@ -69,10 +88,10 @@ A Raspberry Pi left on removes the constraint entirely for about 3 W.
 ## Requirements
 
 - Node 20+
-- A Cloudflare account — **the free plan is enough**
+- A Cloudflare account, **the free plan is enough**
 - A domain on that account with **Cloudflare nameservers active**. A Worker
   requires it (Pages doesn't, but Pages is feature-frozen).
-- For the downloader: Python 3.12+, ffmpeg and Deno — or just Docker
+- For the downloader: Python 3.12+, ffmpeg and Deno, or just Docker
 
 > Deno is not optional. Since yt-dlp 2025.11.12 a JavaScript runtime is required
 > to solve YouTube's n-sig challenges. Without one, yt-dlp silently loses half
@@ -132,7 +151,7 @@ node scripts/secrets.mjs
 ```
 
 It prints three secrets, the `wrangler secret put` commands to run, and **your
-activation link**. Keep that output — the link is what grants access.
+activation link**. Keep that output: the link is what grants access.
 
 | Secret | Role |
 |---|---|
@@ -152,7 +171,7 @@ node scripts/secrets.mjs music.yourdomain.com
 npx wrangler deploy
 ```
 
-A few seconds — the Worker ships no container image, it is plain JavaScript and
+A few seconds: the Worker ships no container image, it is plain JavaScript and
 static assets. The DNS record for the subdomain is created for you.
 
 ### 6. Activate your devices
@@ -177,10 +196,15 @@ visitor gets a flat 401.
 Safari → Share → **Add to Home Screen**. Still manual on iOS, there is no
 install button.
 
+<p align="center">
+  <img src="docs/ios-share-sheet.png" alt="iOS share sheet" width="42%">
+  <img src="docs/ios-add-to-home.png" alt="Add to Home Screen dialog" width="42%">
+</p>
+
 > A pinned app gets **its own storage container**, separate from Safari. The
 > activation cookie does not carry over: open the activation link **a second
 > time from inside the installed app**, or it will show "Access denied". Same
-> for offline downloads — they belong to the installed app, not to Safari.
+> for offline downloads: they belong to the installed app, not to Safari.
 
 ### 8. Start the downloader
 
@@ -254,7 +278,7 @@ same signed object as the cookie, with the same lifetime.
 
 This opens no CSRF hole: a third-party site cannot set a custom header on a
 cross-origin request, and the Worker serves no permissive CORS rules. Only an
-extension holding the host permission can do it — which requires you to install
+extension holding the host permission can do it, which requires you to install
 it explicitly.
 
 The injected content script never calls the Worker itself; it goes through the
@@ -269,14 +293,14 @@ All through environment variables.
 
 | Variable | Default | Role |
 |---|---|---|
-| `APP_URL` | — | public URL of the Worker (required) |
-| `WORKER_TOKEN` | — | shared secret (required) |
+| `APP_URL` | none | public URL of the Worker (required) |
+| `WORKER_TOKEN` | none | shared secret (required) |
 | `POLL_INTERVAL` | `30` | seconds between empty polls |
-| `YT_COOKIES` | — | Netscape-format cookies, if anti-bot kicks in |
-| `YT_PROXY` | — | `http://user:pass@host:port` |
+| `YT_COOKIES` | none | Netscape-format cookies, if anti-bot kicks in |
+| `YT_PROXY` | none | `http://user:pass@host:port` |
 
 On `POLL_INTERVAL`: 30 s is 2,880 requests/day, negligible against the free
-tier's 100,000/day. Dropping to 1 s would burn 86,400 for nothing — the download
+tier's 100,000/day. Dropping to 1 s would burn 86,400 for nothing: the download
 itself takes about thirty seconds, the wait is invisible. When a track does
 start, polling doesn't wait: a queue of several tracks drains back to back.
 
@@ -287,7 +311,7 @@ next poll. That covers a power cut, a `docker stop` mid-download, and a laptop
 lid being closed. Every progress report refreshes the lease, so a long download
 is never preempted.
 
-Claiming is atomic — `UPDATE ... WHERE id = ? AND status = 'pending'`, then the
+Claiming is atomic: `UPDATE ... WHERE id = ? AND status = 'pending'`, then the
 Worker checks `changes`. You can run two downloaders (a PC and a Pi) with no
 risk of duplicates.
 
@@ -295,17 +319,17 @@ risk of duplicates.
 
 ## If YouTube blocks you
 
-With a residential IP this is unlikely — it was the number one risk of the
+With a residential IP this is unlikely: it was the number one risk of the
 earlier architecture, which egressed from Cloudflare IPs. If you do see
 "YouTube blocked the request":
 
 **a. Slow down.** The downloader already serialises tracks and sleeps between
 requests. If you just queued thirty tracks, wait a few hours.
 
-**b. A residential proxy** — mostly useful if you run the image on a VPS rather
+**b. A residential proxy**, mostly useful if you run the image on a VPS rather
 than at home. Set `YT_PROXY`.
 
-**c. Account cookies** — effective, but carries a real risk: YouTube can
+**c. Account cookies**, effective but carrying a real risk: YouTube can
 restrict the account for hours or months. **Use a throwaway account, never your
 main one.**
 
@@ -317,7 +341,7 @@ window without reopening the session**. Pass the contents in `YT_COOKIES`.
 > Send the **files** through R2, not through a tunnel from your machine. Serving
 > large media across the Cloudflare CDN from a personal server falls outside the
 > terms of service; from R2 it is explicitly allowed. That is already what the
-> code does — your machine POSTs to the Worker, which puts to R2.
+> code does: your machine POSTs to the Worker, which puts to R2.
 
 ---
 
@@ -325,7 +349,7 @@ window without reopening the session**. Pass the contents in `YT_COOKIES`.
 
 **No re-encoding.** YouTube serves Opus at ~160 kb/s at best (itag 251).
 Transcoding that to MP3 320 would be a pure loss for a file twice the size. The
-downloader only swaps the container — the audio bytes are copied as-is.
+downloader only swaps the container: the audio bytes are copied as-is.
 
 **Opus in `.ogg`, not `.webm`.** Safari plays Opus **only** inside an Ogg
 container, and only since iOS 18.4. Not in WebM, not in MP4. When the source is
@@ -335,7 +359,7 @@ downloading the whole file.
 **Offline audio does not go through the service worker.** Safari probes every
 `<audio>` with `Range: bytes=0-1`; a service worker answering 200 breaks
 playback silently. Files are stored in the Cache API, read back as a `Blob` and
-played from a `blob:` URL — which Safari handles natively. The service worker
+played from a `blob:` URL, which Safari handles natively. The service worker
 only deals with the app shell and artwork.
 
 **One `<audio>` element, never Web Audio.** `AudioContext` is suspended in the
@@ -373,7 +397,7 @@ WORKER_TOKEN=dev
 
 Then open `http://localhost:8787/auth?k=dev`.
 
-The downloader works locally with no special setup — it is the caller, so
+The downloader works locally with no special setup: it is the caller, so
 `localhost` is fine:
 
 ```bash
@@ -402,8 +426,8 @@ signing (cookie **and** `X-Session` header) and `Range` header parsing.
 | R2 | 10 GB, egress always $0 | ~1,500 tracks |
 | Downloader | your own machine | ~3 W on a Pi |
 
-**Total: $0.** The only line that can tip into paid is R2 past 10 GB — roughly
-1,500 tracks — at $0.015/GB-month after that.
+**Total: $0.** The only line that can tip into paid is R2 past 10 GB, roughly
+1,500 tracks, at $0.015/GB-month after that.
 
 ---
 
@@ -419,27 +443,11 @@ Two regressions independent of this code, worth testing early on your phone:
   "playlist, screen locked" use case.
 
 The usual mitigation is to preload the next track and keep the Media Session
-up to date — which the code already does — but nothing fixes it fully on the
+up to date, which the code already does, but nothing fixes it fully on the
 web.
 
 ---
 
-## Legal
+## Licence
 
-yt-dlp is legal software: the DMCA takedown filed by the RIAA in 2020 was
-reversed by GitHub after the EFF intervened. Downloading from YouTube does
-however violate its terms of service, and in France the private-copy exception
-was narrowed by the CJEU ruling of 16 April 2026 concerning offline downloads
-from streaming platforms.
-
-This project is published for personal, educational use. You are responsible for
-how you use it. This is not legal advice.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-Code comments are written in French; the documentation, the app and the
-extension are in English.
+MIT, see [LICENSE](LICENSE) and the notice at the top of this file.

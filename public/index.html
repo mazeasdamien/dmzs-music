@@ -14,7 +14,7 @@
 <link rel="alternate icon" href="/icon-192.png" type="image/png">
 <title>Music</title>
 <style>
-/* ─── tokens ─────────────────────────────────────────────── */
+/* ─── design tokens ──────────────────────────────────────── */
 :root{
   --bg:#09090b; --elev:#141417; --elev2:#1d1d21;
   --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.13);
@@ -47,24 +47,24 @@ h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 .iconbtn:active{background:#2a2a30;transform:scale(.93)}
 
 .actions{display:flex;gap:8px;margin:15px 0 11px}
-/* min-width:0 : sans lui, « Lire » et « Aléatoire » refusent de se comprimer
-   sous la largeur de leur texte et poussent le bouton suivant hors de l'écran. */
+/* min-width:0 is load bearing: without it, "Play" and "Shuffle" refuse to
+   shrink below their text width and push the next button off screen. */
 .act{flex:1;min-width:0;height:40px;border-radius:var(--r);gap:7px;background:var(--elev);border:1px solid var(--line);font-size:14.5px;font-weight:500;letter-spacing:-.005em;transition:background .12s,transform .08s}
 .act:active{background:var(--elev2);transform:scale(.985)}
 .act svg{opacity:.9}
 
-/* Bouton « tout télécharger » : largeur fixe, il ne prend pas la place des
-   deux boutons de lecture. Affiche « n/m » pendant le travail. */
+/* The "download everything" button: fixed width, so it does not eat into the
+   two playback buttons. Shows "n/m" while working. */
 .act.sq{flex:none;min-width:44px;padding:0 11px}
 .act.sq.done{color:var(--t3)}
 .act.sq.run{color:var(--acc)}
 .act.sq .n{font-size:13px;font-variant-numeric:tabular-nums;margin-left:6px}
 
-/* Compteur d'ecoutes, masque tant que le titre n'a jamais ete joue. */
+/* Play counter, hidden until the track has actually been played. */
 .plays{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--t3);flex:none}
 .plays svg{opacity:.75}
 
-/* Interrupteur « Auto » : tout nouveau titre part sur l'appareil tout seul. */
+/* The "Auto" switch: every new track goes to the device on its own. */
 .metarow{display:flex;align-items:center;gap:7px;margin-top:3px}
 .autopill{height:18px;padding:0 7px;border-radius:9px;flex:none;background:var(--elev2);
   color:var(--t3);border:1px solid var(--line);font-size:10.5px;font-weight:600;
@@ -110,7 +110,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .playing .eq i:nth-child(3){animation:b .92s .07s ease-in-out infinite alternate}
 @keyframes b{from{height:22%}to{height:100%}}
 
-/* états de travail */
+/* work-in-progress states */
 .row.busy .art2{color:var(--acc)}
 .row.err .art2{color:var(--red)}
 .pct{font-size:12.5px;color:var(--acc)}
@@ -158,9 +158,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px}
 .npart .box{width:min(100%,340px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
 #np:not(.playing) .npart .box{transform:scale(.88)}
-/* position:relative indispensable : .fb est en position:absolute et passerait
-   AU-DESSUS de l'image sans ça — la pochette existe mais reste masquée par la
-   lettre de repli. Même raison que .art img plus haut. */
+/* position:relative is required: .fb is position:absolute and would paint ON
+   TOP of the image without it, so the artwork exists but stays hidden behind
+   the fallback letter. Same reason as .art img above. */
 .npart img{width:100%;height:100%;object-fit:cover;position:relative;display:block}
 
 .npmeta{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:18px}
@@ -199,8 +199,8 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .urlbox input{flex:1;font-size:14.5px;min-width:0}
 .urlbox input::placeholder{color:var(--t3)}
 .paste{font-size:13px;font-weight:500;color:var(--acc);flex:none;padding:0 2px}
-/* NB : ne pas nommer cette classe « err » — elle entrerait en collision
-   avec le modificateur .row.err et masquerait les lignes en échec. */
+/* Note: do not name this class "err". It would collide with the .row.err
+   modifier and hide the failed rows in the list. */
 .formerr{display:none;font-size:13px;color:var(--red);margin-top:10px;line-height:1.45}
 .formerr.show{display:block}
 
@@ -221,13 +221,13 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--sab) + 26px);transform:translate(-50%,14px);z-index:80;background:rgba(240,240,245,.96);color:#101014;padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px rgba(0,0,0,.4);max-width:82vw;text-align:center}
 #toast.up{opacity:1;transform:translate(-50%,0)}
 
-/* ─── verrouillage en portrait ────────────────────────────────
-   iOS ignore le champ "orientation" du manifeste pour une app épinglée, et
-   screen.orientation.lock() n'existe pas dans Safari : le seul verrou qui
-   tienne côté web est de refuser d'afficher l'interface en paysage.
+/* ─── portrait lock ───────────────────────────────────────────
+   iOS ignores the manifest's "orientation" field for a pinned app, and
+   screen.orientation.lock() does not exist in Safari. The only lock that
+   holds on the web is refusing to render the interface in landscape.
 
-   Le garde max-height ne vise que les téléphones couchés — une fenêtre de PC
-   est en paysage elle aussi, et n'a aucune raison d'être bloquée. */
+   The max-height guard only targets phones lying flat: a desktop window is
+   landscape too, and has no reason to be blocked. */
 #rotate{display:none}
 @media (orientation:landscape) and (max-height:520px){
   #app,#mini,#np,#scrim,.sheet,#toast{display:none!important}
@@ -375,7 +375,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 <script>
 "use strict";
 
-/* ═══ constantes ═══════════════════════════════════════════ */
+/* ═══ constants ════════════════════════════════════════════ */
 const MEDIA_CACHE = "dmzs-media-v1";
 const mediaURL = (id) => `/media/${id}`;
 const artURL   = (id) => `/art/${id}`;
@@ -385,28 +385,28 @@ const ICON_PAUSE = `<svg width="19" height="19" viewBox="0 0 24 24" fill="curren
 const ICON_PLAY_L  = `<svg width="25" height="25" viewBox="0 0 24 24" fill="currentColor" style="margin-left:3px"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
 const ICON_PAUSE_L = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1.3"/><rect x="14" y="4.5" width="4" height="15" rx="1.3"/></svg>`;
 
-/* ═══ état ═════════════════════════════════════════════════ */
+/* ═══ state ════════════════════════════════════════════════ */
 let tracks = [];
-let offline = new Set();          // ids disponibles hors-ligne
+let offline = new Set();          // ids available offline
 let queue = [], qi = -1;
-let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 titre
+let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 track
 let pollTimer = null;
-let objectURL = null;             // URL blob: courante, à révoquer
+let objectURL = null;             // current blob: URL, to be revoked
 
 const REP = ["off", "all", "one"];
 const $ = (s) => document.querySelector(s);
 
 /* ═══ audio ════════════════════════════════════════════════ */
-// UN SEUL élément, créé une fois. Le premier play() vient d'un vrai geste
-// utilisateur ; l'élément reste ensuite « béni » et les changements de src
-// suivants passent, y compris depuis l'évènement `ended`.
-// (Web Audio serait un piège : son AudioContext est suspendu en arrière-plan
-//  sur iOS, ce qui tuerait la lecture écran verrouillé.)
+// ONE element, created once. The first play() comes from a real user gesture;
+// the element then stays "blessed", and later src changes go through, the
+// `ended` event included.
+// (Web Audio would be a trap: its AudioContext is suspended in the background
+//  on iOS, which would kill lock-screen playback.)
 const audio = new Audio();
 audio.preload = "metadata";
 audio.setAttribute("playsinline", "");
 
-/* ═══ utilitaires ══════════════════════════════════════════ */
+/* ═══ helpers ══════════════════════════════════════════════ */
 const mmss = (s) => {
   s = Math.max(0, Math.round(Number(s) || 0));
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -424,8 +424,8 @@ const byId = (id) => tracks.find((t) => t.id === id);
 function artHTML(t) {
   if (!t) return "";
   const h = hue(t.title + t.artist);
-  // Majuscule d'abord, échappement ensuite : l'inverse produirait « &LT; »
-  // pour un titre commençant par « < ».
+  // Uppercase first, escape second: the other way round would produce "&LT;"
+  // for a title starting with "<".
   const letter = esc(((t.title || "?").trim()[0] || "?").toUpperCase());
   return `<div class="fb" style="background:linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))">${letter}</div>` +
          (t.status === "ready" ? `<img src="${artURL(t.id)}" alt="" loading="lazy" onerror="this.remove()">` : "");
@@ -479,11 +479,11 @@ function schedulePoll() {
   }
 }
 
-/* ═══ hors-ligne ═══════════════════════════════════════════
-   Stockage via l'API Cache, lecture via une URL blob:.
-   On NE passe PAS par le service worker pour l'audio : Safari sonde chaque
-   <audio> avec un « Range: bytes=0-1 », et un SW qui répond 200 casse la
-   lecture. Une URL blob: contourne complètement l'interception fetch.
+/* ═══ offline ══════════════════════════════════════════════
+   Stored through the Cache API, played back from a blob: URL.
+   The service worker is NOT used for audio: Safari probes every <audio> with
+   a "Range: bytes=0-1", and a SW answering 200 breaks playback. A blob: URL
+   bypasses fetch interception entirely.
    ════════════════════════════════════════════════════════ */
 async function refreshOffline() {
   try {
@@ -500,10 +500,10 @@ async function refreshOffline() {
 async function saveOffline(id) {
   const c = await caches.open(MEDIA_CACHE);
   const res = await fetch(mediaURL(id), { credentials: "same-origin" });
-  // cache.put() rejette un 206 : on exige bien une réponse complète.
+  // cache.put() rejects a 206, so a complete response is required here.
   if (res.status !== 200) throw new Error("download failed");
   await c.put(mediaURL(id), res);
-  // La pochette est gérée par le service worker, on la réchauffe au passage.
+  // The artwork is handled by the service worker; warm it up while we are here.
   fetch(artURL(id), { credentials: "same-origin" }).catch(() => {});
   offline.add(id);
 }
@@ -514,9 +514,9 @@ async function dropOffline(id) {
   offline.delete(id);
 }
 
-/* Tout mettre sur l'appareil, en série.
-   En série et pas en parallèle : dix fetch simultanés sur un réseau mobile
-   se gênent, saturent la mémoire de Safari, et on perd le décompte. */
+/* Put everything on the device, one at a time.
+   Serial rather than parallel: ten simultaneous fetches on a mobile network
+   get in each other's way, exhaust Safari's memory, and lose the count. */
 let bulk = { on: false, stop: false, done: 0, total: 0 };
 
 const ICON_DL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`;
@@ -543,9 +543,9 @@ function renderDlAll() {
   }
 }
 
-/* Auto : chaque nouveau titre prêt part sur l'appareil sans qu'on y pense.
-   Le réglage est propre à cet appareil — le stockage hors-ligne l'est aussi,
-   et une app épinglée a son propre conteneur, séparé de Safari. */
+/* Auto: every newly ready track goes to the device without thinking about it.
+   The setting is per device, as offline storage is too, and a pinned app has
+   its own container, separate from Safari. */
 let autoDl = localStorage.getItem("dmzs_auto") === "1";
 
 function renderAuto() {
@@ -582,8 +582,8 @@ async function downloadAll(silent = false) {
       await saveOffline(t.id);
     } catch (e) {
       failed++;
-      // Safari lève QuotaExceededError quand le conteneur de l'app est plein.
-      // Insister ne sert à rien : les suivants échoueront pareil.
+      // Safari throws QuotaExceededError when the app's container is full.
+      // Insisting is pointless: the next ones would fail just the same.
       if (e && (e.name === "QuotaExceededError" || /quota/i.test(e.message || ""))) {
         full = true;
         break;
@@ -601,8 +601,8 @@ async function downloadAll(silent = false) {
   renderList();
 
   if (full) {
-    // On coupe l'auto : sans ça, chaque sondage relancerait un téléchargement
-    // condamné à échouer, en boucle.
+    // Turn auto off: without this, every poll would restart a download that
+    // is doomed to fail, forever.
     if (autoDl) { autoDl = false; localStorage.setItem("dmzs_auto", "0"); renderAuto(); }
     toast("Storage full — auto-download turned off");
   } else if (silent) {
@@ -624,7 +624,7 @@ async function srcFor(id) {
   return mediaURL(id);
 }
 
-/* ═══ rendu ════════════════════════════════════════════════ */
+/* ═══ rendering ════════════════════════════════════════════ */
 function visible() {
   const q = $("#q").value.trim().toLowerCase();
   const list = tracks;
@@ -729,8 +729,8 @@ function updateMediaSession(t) {
       title: t.title,
       artist: t.artist || "",
       album: "Library",
-      // Fournir aussi de petites tailles : sans elles, le lecteur compact de
-      // l'écran verrouillé iOS affiche un carré gris.
+      // Small sizes matter too: without them, the compact player on the iOS
+      // lock screen shows a grey square.
       artwork: [96, 128, 192, 256, 384, 512].map((s) => ({
         src: artURL(t.id), sizes: `${s}x${s}`, type: "image/jpeg",
       })),
@@ -758,7 +758,7 @@ function syncSessionState() {
   } catch {}
 }
 
-/* ═══ lecture ══════════════════════════════════════════════ */
+/* ═══ playback ═════════════════════════════════════════════ */
 function buildQueue(startId) {
   let ids = playable().map((t) => t.id);
   if (shuffle) {
@@ -780,9 +780,9 @@ async function loadInto(id) {
   audio.src = src;
 }
 
-/* Compteur d'écoutes. On ne compte qu'au bout de 20 s de lecture réelle
-   (ou la moitié du titre s'il est plus court) : enchaîner dix titres en
-   les sautant ne doit pas les compter comme dix écoutes. */
+/* Play counter. Only counted after 20 s of actual playback (or half the
+   track when it is shorter): skipping through ten tracks must not count as
+   ten plays. */
 let countedId = null;
 
 function countPlay() {
@@ -793,7 +793,7 @@ function countPlay() {
   if (audio.currentTime < Math.min(20, (t.duration || 40) / 2)) return;
 
   countedId = id;
-  // Incrément local immédiat : l'affichage ne dépend pas de l'aller-retour.
+  // Increment locally right away, so the display does not wait on the round trip.
   t.plays = (t.plays || 0) + 1;
   renderList();
   api(`/api/tracks/${id}/play`, { method: "POST" }).catch(() => {});
@@ -864,7 +864,7 @@ audio.addEventListener("error", () => {
   if (audio.src) toast("This track could not be played");
 });
 
-/* ═══ évènements : liste ═══════════════════════════════════ */
+/* ═══ events: list ═════════════════════════════════════════ */
 $("#list").addEventListener("click", (e) => {
   const m = e.target.closest("[data-menu]");
   if (m) { openMenu(m.dataset.menu); return; }
@@ -897,13 +897,13 @@ $("#autoDl").addEventListener("click", () => {
   else toast("Auto-download off");
 });
 
-// Un rechargement en plein téléchargement groupé perdrait les titres restants
-// sans prévenir : Safari affiche la demande de confirmation.
+// Reloading mid bulk-download would silently lose the remaining tracks, so
+// Safari is asked to show its confirmation prompt.
 addEventListener("beforeunload", (e) => {
   if (bulk.on) { e.preventDefault(); e.returnValue = ""; }
 });
 
-/* ═══ évènements : lecteur ═════════════════════════════════ */
+/* ═══ events: player ═══════════════════════════════════════ */
 const openNP = () => { if (queue.length) $("#np").classList.add("up"); };
 $("#mPlay").addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
 $("#mNext").addEventListener("click", (e) => { e.stopPropagation(); next(); });
@@ -961,7 +961,7 @@ $("#np").addEventListener("touchend", () => {
   y0 = null;
 });
 
-/* ═══ feuilles ═════════════════════════════════════════════ */
+/* ═══ sheets ═══════════════════════════════════════════════ */
 const openSheet = (s) => { $("#scrim").classList.add("up"); $(s).classList.add("up"); };
 function closeSheets() {
   $("#scrim").classList.remove("up");
@@ -969,7 +969,7 @@ function closeSheets() {
 }
 $("#scrim").addEventListener("click", closeSheets);
 
-/* — ajout — */
+/* -- adding a track -- */
 let adding = false;
 $("#addBtn").addEventListener("click", () => {
   $("#url").value = "";
@@ -1018,7 +1018,7 @@ $("#addCta").addEventListener("click", async () => {
   }
 });
 
-/* — menu contextuel — */
+/* -- context menu -- */
 let menuId = null;
 function openMenu(id) {
   const t = byId(id);
@@ -1090,8 +1090,8 @@ document.addEventListener("visibilitychange", () => {
 });
 
 (async function init() {
-  // Demande un stockage persistant : sur une app épinglée à l'écran d'accueil,
-  // iOS l'accorde sans afficher de question.
+  // Ask for persistent storage: on an app pinned to the home screen, iOS
+  // grants it without prompting.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
 
   renderAuto();
