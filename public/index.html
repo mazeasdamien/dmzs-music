@@ -684,6 +684,41 @@ const isMix = (t) => (t.duration || 0) >= MIX_MIN;
 
 let mixOnly = localStorage.getItem("dmzs_mixes") === "1";
 
+/* Where each set was left.
+
+   A three-minute song restarting from the top costs three minutes; an hour
+   long set doing the same is simply unusable, so the position is remembered
+   for mixes and for nothing else. The first and last minute are never worth
+   storing: one is indistinguishable from the start, the other from the end.
+
+   On the device rather than in D1: where the phone stopped listening is not
+   where the desktop stopped, and one shared position would have them
+   overwrite each other. */
+const POS_KEY = "dmzs_pos";
+const POS_EDGE = 60;
+
+let positions = {};
+try { positions = JSON.parse(localStorage.getItem(POS_KEY) || "{}"); } catch {}
+
+const flushPos = () => { try { localStorage.setItem(POS_KEY, JSON.stringify(positions)); } catch {} };
+
+function clearPos(id) {
+  if (!id || positions[id] === undefined) return;
+  delete positions[id];
+  flushPos();
+}
+
+function savePos() {
+  const id = queue[qi];
+  const t = byId(id);
+  if (!t || !isMix(t)) return;
+  const pos = audio.currentTime || 0;
+  const dur = audio.duration && isFinite(audio.duration) ? audio.duration : t.duration || 0;
+  if (pos < POS_EDGE || (dur && pos > dur - POS_EDGE)) { clearPos(id); return; }
+  positions[id] = Math.floor(pos);
+  flushPos();
+}
+
 function renderMix() {
   const b = $("#mixBtn");
   b.classList.toggle("on", mixOnly);
@@ -861,8 +896,14 @@ function renderList() {
   const ready = tracks.filter((t) => t.status === "ready");
   const bytes = ready.reduce((s, t) => s + (t.size || 0), 0);
   const off = ready.filter((t) => offline.has(t.id)).length;
+  // Counted apart, because they are shown apart: one number covering both
+  // would claim tracks the library is not showing.
+  const mixes = ready.filter(isMix).length;
+  const songs = ready.length - mixes;
   $("#hmeta").textContent = ready.length
-    ? `${ready.length} track${ready.length > 1 ? "s" : ""} · ${fmtSize(bytes)} · ${off} offline` +
+    ? `${songs} track${songs > 1 ? "s" : ""}` +
+      (mixes ? ` · ${mixes} mix${mixes > 1 ? "es" : ""}` : "") +
+      ` · ${fmtSize(bytes)} · ${off} offline` +
       (stale ? " · no connection" : "")
     : stale
       ? "No connection, and nothing stored on this device"
@@ -1028,11 +1069,28 @@ async function loadInto(id) {
   const src = await srcFor(id);
   if (src.startsWith("blob:")) objectURL = src;
   audio.src = src;
+
+  // Back where the set was left. currentTime cannot be set before the browser
+  // knows the duration, hence the wait; the id is checked again there because
+  // a fast skip can change the track while the metadata is still in flight.
+  const at = positions[id];
+  if (at) {
+    audio.addEventListener("loadedmetadata", () => {
+      if (queue[qi] !== id) return;
+      audio.currentTime = at;
+      renderProgress();
+      toast(`Resuming at ${mmss(at)}`);
+    }, { once: true });
+  }
 }
 
-/* Play counter. Only counted after 20 s of actual playback (or half the
-   track when it is shorter): skipping through ten tracks must not count as
-   ten plays. */
+/* Play counter. Counted the moment the track starts.
+
+   The trigger is `playing` and not `play`: the latter fires on the intent, so
+   a track that then fails to load or never gets past buffering would still be
+   counted. countedId is cleared in loadInto(), which is the only place a new
+   track is put on the element, so pausing and resuming, seeking, or looping on
+   repeat-one all stay at one play. */
 let countedId = null;
 
 function countPlay() {
@@ -1040,7 +1098,6 @@ function countPlay() {
   if (!id || id === countedId) return;
   const t = byId(id);
   if (!t || t.status !== "ready") return;
-  if (audio.currentTime < Math.min(20, (t.duration || 40) / 2)) return;
 
   countedId = id;
   // Increment locally right away, so the display does not wait on the round trip.
@@ -1108,11 +1165,22 @@ function startAll(rnd) {
   if (rnd) toast("Shuffling");
 }
 
-audio.addEventListener("timeupdate", () => { renderProgress(); countPlay(); });
+// timeupdate fires four times a second; writing to localStorage that often
+// would be pointless. Every five seconds of playback is enough to survive the
+// app being killed in the background, which is how a session usually ends.
+let posSaved = 0;
+
+audio.addEventListener("timeupdate", () => {
+  renderProgress();
+  if (Math.abs(audio.currentTime - posSaved) < 5) return;
+  posSaved = audio.currentTime;
+  savePos();
+});
+audio.addEventListener("playing", () => countPlay());
 audio.addEventListener("durationchange", () => { renderProgress(); syncSessionState(); });
-audio.addEventListener("ended", () => next(true));
+audio.addEventListener("ended", () => { clearPos(queue[qi]); next(true); });
 audio.addEventListener("play", () => { renderNow(); renderList(); syncSessionState(); });
-audio.addEventListener("pause", () => { renderNow(); renderList(); syncSessionState(); });
+audio.addEventListener("pause", () => { savePos(); renderNow(); renderList(); syncSessionState(); });
 audio.addEventListener("error", () => {
   if (audio.src) toast("This track could not be played");
 });
@@ -1202,6 +1270,7 @@ document.addEventListener("visibilitychange", () => {
 // Reloading mid bulk-download would silently lose the remaining tracks, so
 // Safari is asked to show its confirmation prompt.
 addEventListener("beforeunload", (e) => {
+  savePos();
   if (bulk.on) { e.preventDefault(); e.returnValue = ""; }
 });
 
@@ -1579,9 +1648,16 @@ $("#menuSheet").addEventListener("click", async (e) => {
   if (action === "del") {
     if (queue[qi] === id) { audio.pause(); audio.removeAttribute("src"); qi = -1; queue = []; $("#mini").classList.remove("up"); }
     await dropOffline(id).catch(() => {});
+    clearPos(id);
     await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => {});
     tracks = tracks.filter((t) => t.id !== id);
+    // qi is an index, so removing anything ahead of it in the queue shifts it
+    // onto the wrong track: the bar would name the next one while the audio
+    // kept playing the current one, and "next" would skip a track. Follow the
+    // id across the filter instead of trusting the position.
+    const cur = queue[qi];
     queue = queue.filter((x) => x !== id);
+    qi = cur ? queue.indexOf(cur) : -1;
     toast("Deleted");
     renderList(); renderNow();
   }
@@ -1590,7 +1666,10 @@ $("#menuSheet").addEventListener("click", async (e) => {
 /* ═══ init ═════════════════════════════════════════════════ */
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("visibilitychange", () => {
+  // Backgrounded is where an iOS app gets killed without warning, so the
+  // position is written before the tab goes quiet rather than after.
   if (document.visibilityState === "visible") load();
+  else savePos();
 });
 
 (async function init() {

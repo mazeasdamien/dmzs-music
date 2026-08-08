@@ -91,6 +91,7 @@ The library is deliberately thin. It is a listening surface, not a manager.
 - **Recent / Most played** reorders the library.
 - **Favourites** narrows it to starred tracks.
 - **Mixes** holds everything over ten minutes, and the library holds the rest.
+  A mix picks up where it was left; a song always starts at the top.
 - **Swipe a row left** to star it, **right** to unstar it.
 - **Drag along the top of the mini bar** to move through the track without
   opening the full-screen player.
@@ -113,6 +114,14 @@ is the one place that ignores the split and looks through everything, because
 refusing to find a mix by name would read as the track having been lost. A
 track that is still downloading has no duration yet and therefore counts as a
 song; a long one moves across once the downloader reports its length.
+
+Mixes also remember where they were left, songs do not. Restarting a
+three-minute song costs three minutes; restarting an hour-long set is the
+difference between the feature being usable and not. The position lives on the
+device rather than in D1: where the phone stopped listening is not where the
+desktop stopped, and a single shared value would have them overwrite each
+other. The first and last minute are never stored, being indistinguishable from
+the start and the end.
 
 In the full-screen player: **swipe down** to close, **left and right** to
 change track, the **heart** stars what is playing, and the **repeat button**
@@ -457,10 +466,11 @@ background on iOS, which would kill lock-screen playback. A single element
 to a login page would hand HTML to `<audio src>`, which then fails with nothing
 useful to catch.
 
-**Play counts are server-side.** Counted after 20 seconds of actual playback (or
-half the track if shorter), so skipping through ten tracks doesn't count as ten
-plays. They are what the "Most played" ordering sorts on, which is why the
-threshold matters rather than being a nicety.
+**Play counts are server-side.** Counted the moment a track starts, once per
+load: pausing and resuming, seeking, or leaving it looping on repeat-one all
+stay at one play. Skipping through ten tracks therefore does count as ten
+plays, which is the deliberate reading — starting a track is the play. They are
+what the "Most played" ordering sorts on.
 
 **Ordering and filtering are the same mechanism as playback.** The sort pill,
 the favourites pill and the search box all change what  returns, and

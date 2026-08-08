@@ -318,8 +318,8 @@ async function handleApi(request, env, path) {
   }
 
   // POST /api/tracks/:id/play, one more play.
-  // The client only calls this after 20 s of actual playback: skipping through
-  // ten tracks must not count as ten plays.
+  // The client calls this once per track load, as soon as playback starts, and
+  // never again for the same load: pausing, seeking and looping do not count.
   const played = path.match(/^\/api\/tracks\/([\w-]{11})\/play$/);
   if (played && request.method === "POST") {
     const r = await env.DB.prepare(
