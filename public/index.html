@@ -175,8 +175,15 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
      game; continuing the surface into it costs nothing and always looks
      right. The shadow falls outside the viewport when there is no strip. */
   box-shadow:0 60px 0 0 var(--glass);
+  /* The bar owns every gesture that starts on it: the top strip is a
+     scrubber, and nothing here scrolls. Without this, iOS claims a sideways
+     drag for its own navigation and cancels the pointer mid-seek. */
+  touch-action:none;
 }
 #mini.up{transform:translateY(0)}
+/* The rail behind the progress line, so the timeline reads as a full width
+   thing that can be dragged rather than an orange stub. */
+#mini::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--track)}
 #mini .art{width:42px;height:42px;border-radius:4px}
 #mini .ttl{font-size:13.5px}
 #mini .art2{font-size:11.5px;margin-top:1px}
@@ -186,7 +193,12 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #mFav{color:var(--t3)}
 #mFav.on{color:var(--acc)}
 .mbtn:active{opacity:.5}
-#mprog{position:absolute;left:0;top:0;height:2px;background:var(--acc);width:0;transition:width .25s linear}
+/* Progress line and scrubber in one. It stays 2px at rest, so it reads as a
+   status and not as a control, and thickens under the thumb. The width
+   transition is what smooths the once-a-second timeupdate; during a drag it
+   would lag behind the finger, hence the override. */
+#mprog{position:absolute;left:0;top:0;height:2px;background:var(--acc);width:0;transition:width .25s linear,height .12s}
+#mini.seek #mprog{height:5px;transition:height .12s}
 
 #np{
   position:fixed;inset:0;z-index:40;background:var(--bg);
@@ -307,6 +319,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
           <span class="meta" id="hmeta">Loading…</span>
           <button class="autopill" id="sortBtn" title="Order of the library, and of playback">Recent</button>
           <button class="autopill" id="favBtn" title="Show and play only starred tracks">Favourites</button>
+          <button class="autopill" id="mixBtn" title="Tracks over ten minutes, kept out of the library">Mixes</button>
         </div>
       </div>
       <div class="htools">
@@ -430,6 +443,7 @@ const ICON_PAUSE_L = `<svg width="24" height="24" viewBox="0 0 24 24" fill="curr
 let tracks = [];
 let offline = new Set();          // ids available offline
 let queue = [], qi = -1;
+let queueSrc = "Library";         // where the current queue was built from
 let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 track
 let pollTimer = null;
 let objectURL = null;             // current blob: URL, to be revoked
@@ -656,6 +670,26 @@ function renderFav() {
   b.setAttribute("aria-pressed", favOnly ? "true" : "false");
 }
 
+/* Anything past ten minutes is a set, not a track: a DJ mix, a live recording
+   or a full album uploaded as one video is already a playlist of its own.
+   Leaving those in the library means a shuffle of three-minute songs stops
+   dead for an hour, so they live in their own view and the library shows only
+   real tracks. The queue follows the same split, since buildQueue() reads
+   visible().
+
+   A pending track has no duration yet and therefore counts as a song until it
+   is ready; a long one moves to Mixes when the downloader reports its length. */
+const MIX_MIN = 600;
+const isMix = (t) => (t.duration || 0) >= MIX_MIN;
+
+let mixOnly = localStorage.getItem("dmzs_mixes") === "1";
+
+function renderMix() {
+  const b = $("#mixBtn");
+  b.classList.toggle("on", mixOnly);
+  b.setAttribute("aria-pressed", mixOnly ? "true" : "false");
+}
+
 async function toggleFav(id) {
   const t = byId(id);
   if (!t) return;
@@ -755,9 +789,11 @@ async function srcFor(id) {
 /* ═══ rendering ════════════════════════════════════════════ */
 function visible() {
   const q = $("#q").value.trim().toLowerCase();
+  // A search deliberately ignores the mixes split and looks through the whole
+  // library: refusing to find a mix by name would read as the track being lost.
   let list = q
     ? tracks.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q))
-    : tracks;
+    : tracks.filter((t) => isMix(t) === mixOnly);
 
   // Filtering here rather than at render time is what makes "play only the
   // favourites" work: buildQueue() reads this same list.
@@ -773,6 +809,16 @@ function visible() {
   return list;
 }
 const playable = () => visible().filter((t) => t.status === "ready");
+
+/* Why the list is empty is never obvious from an empty list: a filter is on,
+   a search found nothing, or the library really is new. */
+function emptyText() {
+  if ($("#q").value.trim()) return "No results.";
+  if (favOnly) return "<b>No favourites here.</b>Swipe a row left to star a track.";
+  if (mixOnly) return "<b>No mixes yet.</b>Anything over ten minutes lands here.";
+  if (tracks.length) return "<b>Nothing under ten minutes.</b>The library is all in Mixes.";
+  return "<b>Nothing here yet.</b>Paste a YouTube link to get started.";
+}
 
 function renderList() {
   const rows = visible();
@@ -810,11 +856,7 @@ function renderList() {
           ${busy ? `<div class="rowbar"><i style="width:${t.progress || 0}%"></i></div>` : ""}
         </div>`;
       }).join("")
-    : `<div class="empty">${
-        $("#q").value.trim()
-          ? "No results."
-          : "<b>Nothing here yet.</b>Paste a YouTube link to get started."
-      }</div>`;
+    : `<div class="empty">${emptyText()}</div>`;
 
   const ready = tracks.filter((t) => t.status === "ready");
   const bytes = ready.reduce((s, t) => s + (t.size || 0), 0);
@@ -906,7 +948,7 @@ function renderNow() {
     ["Repeat off", "Repeat the queue", "Repeat this track"][repeat]
   );
   $("#npSrc").textContent =
-    repeat === 2 ? "Repeating this track" : shuffle ? "Shuffle · Library" : "Library";
+    repeat === 2 ? "Repeating this track" : shuffle ? `Shuffle · ${queueSrc}` : queueSrc;
   renderProgress();
 }
 
@@ -920,6 +962,12 @@ function renderProgress() {
   $("#mprog").style.width = p + "%";
   $("#npCur").textContent = mmss(pos);
   $("#npRem").textContent = "-" + mmss(Math.max(0, dur - pos));
+  // A 5px line is not something a position can be read off, so while the mini
+  // bar is being dragged its subtitle carries the time. renderNow() puts the
+  // artist back when the drag ends.
+  if ($("#mini").classList.contains("seek")) {
+    $("#mArtist").textContent = `${mmss(pos)} / ${mmss(dur)}`;
+  }
 }
 
 /* ═══ Media Session ════════════════════════════════════════ */
@@ -961,6 +1009,7 @@ function syncSessionState() {
 
 /* ═══ playback ═════════════════════════════════════════════ */
 function buildQueue(startId) {
+  queueSrc = mixOnly ? "Mixes" : favOnly ? "Favourites" : "Library";
   let ids = playable().map((t) => t.id);
   if (shuffle) {
     for (let i = ids.length - 1; i > 0; i--) {
@@ -1128,6 +1177,15 @@ $("#favBtn").addEventListener("click", () => {
   else toast(favOnly ? "Favourites only" : "Showing everything");
 });
 
+$("#mixBtn").addEventListener("click", () => {
+  mixOnly = !mixOnly;
+  localStorage.setItem("dmzs_mixes", mixOnly ? "1" : "0");
+  renderMix();
+  renderList();
+  if (mixOnly && !tracks.some(isMix)) toast("Nothing over ten minutes yet");
+  else toast(mixOnly ? "Mixes · over ten minutes" : "Back to the library");
+});
+
 /* Away from the tab, timeupdate is throttled while the audio keeps playing, so
    the bar is stale on return and its width transition animates across the gap.
    That slide is the "jump". Snap to the real position instead, then restore
@@ -1182,20 +1240,88 @@ $("#npFav").addEventListener("click", () => {
 });
 
 
-/* scrubber */
-const scrub = $("#scrub");
-function seek(e) {
+/* scrubber
+   Two surfaces seek the same timeline: the bar in the full-screen player, and
+   the progress line on the mini bar. Both end up here. */
+function seekRatio(p) {
   const t = byId(queue[qi]);
   if (!t) return;
   const dur = audio.duration && isFinite(audio.duration) ? audio.duration : t.duration || 0;
   if (!dur) return;
-  const b = scrub.querySelector(".bar").getBoundingClientRect();
-  const x = (e.touches ? e.touches[0].clientX : e.clientX) - b.left;
-  audio.currentTime = Math.max(0, Math.min(1, x / b.width)) * dur;
+  audio.currentTime = Math.max(0, Math.min(1, p)) * dur;
   renderProgress();
 }
+const ratioIn = (el, e) => {
+  const b = el.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - b.left;
+  return x / b.width;
+};
+
+const scrub = $("#scrub");
+const seek = (e) => seekRatio(ratioIn(scrub.querySelector(".bar"), e));
 scrub.addEventListener("pointerdown", (e) => { scrub.setPointerCapture(e.pointerId); seek(e); });
 scrub.addEventListener("pointermove", (e) => { if (scrub.hasPointerCapture(e.pointerId)) seek(e); });
+
+/* The same timeline, without opening the player: drag along the top of the
+   mini bar and the track follows.
+
+   Deliberately not an overlay with its own hit area. A strip tall enough to
+   catch a thumb would sit on top of the artwork and the play button and eat
+   their taps. This is a plain pointerdown on the bar that only becomes a
+   scrub once the thumb has actually travelled sideways, so a tap goes
+   through untouched and still opens the full-screen player.
+
+   The click that follows a real drag is swallowed: the pointer is released
+   over the title or a button, whose handler would otherwise fire. */
+(function miniScrub() {
+  const mini = $("#mini");
+  const ZONE = 20;   // px from the top of the bar that arm the gesture
+  const SLOP = 8;    // px of travel before it counts as a drag
+  let armed = false, live = false, x0 = 0, pid = null, swallow = false;
+
+  function stop() {
+    armed = false;
+    if (pid !== null) {
+      try { mini.releasePointerCapture(pid); } catch {}
+      pid = null;
+    }
+    if (!live) return;
+    live = false;
+    mini.classList.remove("seek");
+    swallow = true;
+    // The click may never come (a drag ending outside the bar), so the guard
+    // expires on its own rather than eating the next unrelated tap.
+    setTimeout(() => { swallow = false; }, 400);
+    renderNow();
+  }
+
+  mini.addEventListener("pointerdown", (e) => {
+    if (qi < 0) return;
+    if (e.clientY - mini.getBoundingClientRect().top > ZONE) return;
+    armed = true; live = false; x0 = e.clientX; pid = e.pointerId;
+  });
+
+  mini.addEventListener("pointermove", (e) => {
+    if (!armed) return;
+    if (!live) {
+      if (Math.abs(e.clientX - x0) < SLOP) return;
+      live = true;
+      mini.classList.add("seek");
+      try { mini.setPointerCapture(pid); } catch {}
+    }
+    seekRatio(ratioIn(mini, e));
+  });
+
+  mini.addEventListener("pointerup", stop);
+  mini.addEventListener("pointercancel", stop);
+
+  addEventListener("click", (e) => {
+    if (!swallow) return;
+    swallow = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+})();
 
 /* Swipe the full-screen player: down to close, left and right to change
    track. The axis is decided once, on the first few pixels, and then held for
@@ -1475,6 +1601,7 @@ document.addEventListener("visibilitychange", () => {
   renderSort();
   measureScrollbar();
   renderFav();
+  renderMix();
   repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
   await refreshOffline();
   await load();

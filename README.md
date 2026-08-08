@@ -90,7 +90,10 @@ The library is deliberately thin. It is a listening surface, not a manager.
 - **Shuffle** plays the visible list in random order.
 - **Recent / Most played** reorders the library.
 - **Favourites** narrows it to starred tracks.
+- **Mixes** holds everything over ten minutes, and the library holds the rest.
 - **Swipe a row left** to star it, **right** to unstar it.
+- **Drag along the top of the mini bar** to move through the track without
+  opening the full-screen player.
 - **The magnifier** reveals the search field; closing it clears the query.
 - **The download button** carries a badge with how many tracks are not yet on
   this device, and pulls them all down when tapped. Tap again to stop.
@@ -100,6 +103,16 @@ and the search box all change what the library returns, and the play queue is
 built from that same list. Choosing "Most played" therefore plays from most to
 least played; turning on "Favourites" plays only those. There is no separate
 "play this selection" path to disagree with what is on screen.
+
+The ten-minute line exists because a DJ set, a live recording or an album
+uploaded as one video is already a playlist of its own, and one of them landing
+in a shuffle stops the listening dead for an hour. They are not hidden, they
+are somewhere else: the **Mixes** pill swaps the library for them, and the
+queue follows, so shuffling from there shuffles sets and nothing else. Search
+is the one place that ignores the split and looks through everything, because
+refusing to find a mix by name would read as the track having been lost. A
+track that is still downloading has no duration yet and therefore counts as a
+song; a long one moves across once the downloader reports its length.
 
 In the full-screen player: **swipe down** to close, **left and right** to
 change track, the **heart** stars what is playing, and the **repeat button**
