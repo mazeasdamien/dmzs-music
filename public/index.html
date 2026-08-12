@@ -83,6 +83,19 @@ h1{font-size:27px;font-weight:700;letter-spacing:-.021em;line-height:1.1}
 .plays{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--t3);flex:none}
 .plays svg{opacity:.75}
 
+/* Podcasts. A finished episode reads as done rather than disappearing; a
+   half-listened one carries its progress under the row, the way a busy
+   track carries its download. */
+.row.done .ttl{color:var(--t3)}
+.row.done .art{opacity:.6}
+.addrow{color:var(--acc)}
+.addrow .ttl{color:var(--acc);font-weight:500}
+.addrow svg{color:var(--acc)}
+/* Playback speed, episodes only. Lives in the player header where the
+   layout already reserved a slot; hidden for tracks, which play at 1×. */
+#npRate{visibility:hidden;font-size:11px;font-weight:700;letter-spacing:.01em;background:rgba(255,255,255,.1)}
+#npRate.show{visibility:visible}
+
 /* The "Auto" switch: every new track goes to the device on its own. */
 .metarow{display:flex;align-items:center;flex-wrap:wrap;gap:5px 7px;margin-top:3px}
 .htools{display:flex;align-items:center;gap:8px;flex:none}
@@ -320,6 +333,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
           <button class="autopill" id="sortBtn" title="Order of the library, and of playback">Recent</button>
           <button class="autopill" id="favBtn" title="Show and play only starred tracks">Favourites</button>
           <button class="autopill" id="mixBtn" title="Tracks over ten minutes, kept out of the library">Mixes</button>
+          <button class="autopill" id="podBtn" title="Podcast subscriptions">Podcasts</button>
         </div>
       </div>
       <div class="htools">
@@ -365,7 +379,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <div class="lbl" id="npSrc">Now playing</div>
-    <span class="iconbtn" aria-hidden="true" style="visibility:hidden"></span>
+    <button class="iconbtn" id="npRate" aria-label="Playback speed">1×</button>
   </div>
   <div class="npart"><div class="box" id="npArt"></div></div>
   <div class="npmeta">
@@ -419,6 +433,55 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   </button>
 </div>
 
+<div class="sheet" id="podSheet">
+  <div class="grab"></div>
+  <div class="sh-t">Add a podcast</div>
+  <div class="sh-s">An RSS feed URL, or a link to the show on Apple Podcasts.</div>
+  <div class="urlbox">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--t3)"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>
+    <input id="podUrl" type="url" placeholder="https://…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button class="paste" id="podPaste">Paste</button>
+  </div>
+  <div class="formerr" id="podErr"></div>
+  <button class="cta" id="podGo">Subscribe</button>
+</div>
+
+<div class="sheet" id="podMenu">
+  <div class="grab"></div>
+  <div class="sh-t tr" id="pmTtl"></div>
+  <div class="sh-s tr" id="pmSub" style="margin-bottom:10px"></div>
+  <button class="mi" data-pa="refresh">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 20v-5h5"/></svg>Check for new episodes
+  </button>
+  <button class="mi del" data-pa="unsub">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Unsubscribe
+  </button>
+</div>
+
+<div class="sheet" id="epMenu">
+  <div class="grab"></div>
+  <div class="sh-t tr" id="emTtl"></div>
+  <div class="sh-s tr" id="emSub" style="margin-bottom:10px"></div>
+  <button class="mi" data-ea="play" id="emPlay">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Play now
+  </button>
+  <button class="mi" data-ea="fetch" id="emFetch">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.6A4.5 4.5 0 0 0 17.5 8.4 6 6 0 0 0 6 10a4 4 0 0 0-2 7.4"/><path d="M12 12v8m0 0 3-3m-3 3-3-3"/></svg>
+    <span id="emFetchTxt">Fetch to the cloud</span>
+  </button>
+  <button class="mi" data-ea="dl" id="emDl">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
+    <span id="emDlTxt">Download to device</span>
+  </button>
+  <button class="mi" data-ea="mark" id="emMark">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+    <span id="emMarkTxt">Mark as finished</span>
+  </button>
+  <button class="mi del" data-ea="cloud" id="emCloud">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.6A4.5 4.5 0 0 0 17.5 8.4 6 6 0 0 0 6 10a4 4 0 0 0-2 7.4"/><path d="m9.5 13.5 5 5m0-5-5 5"/></svg>Remove from the cloud
+  </button>
+</div>
+
 <div id="rotate">
   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.8 18.6h2.4"/><path d="M3.4 9.2A9 9 0 0 1 6 5.4"/><path d="M20.6 14.8a9 9 0 0 1-2.6 3.8"/></svg>
   <p><b>Rotate your device</b>This app is designed for portrait.</p>
@@ -431,8 +494,11 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 
 /* ═══ constants ════════════════════════════════════════════ */
 const MEDIA_CACHE = "dmzs-media-v1";
-const mediaURL = (id) => `/media/${id}`;
-const artURL   = (id) => `/art/${id}`;
+// Tracks and podcast episodes share the player, the offline cache and most
+// of the UI; the URL shape is where they differ, so it is decided in
+// exactly one place. Episode art is the show's cover.
+const mediaURL = (id) => (epById(id) ? `/media/ep/${id}` : `/media/${id}`);
+const artURL   = (id) => { const e = epById(id); return e ? `/art/pod/${e.pod}` : `/art/${id}`; };
 
 const ICON_PLAY  = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
 const ICON_PAUSE = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1.3"/><rect x="14" y="4.5" width="4" height="15" rx="1.3"/></svg>`;
@@ -447,6 +513,17 @@ let queueSrc = "Library";         // where the current queue was built from
 let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 track
 let pollTimer = null;
 let objectURL = null;             // current blob: URL, to be revoked
+
+/* Podcasts */
+let pods = [], eps = [];
+let podMode = localStorage.getItem("dmzs_podmode") === "1";
+let curPod = null;                // open show, or null for the shows list
+let podTimer = null;
+let podsLoaded = false;
+let podRate = Number(localStorage.getItem("dmzs_rate")) || 1;
+const PODS_KEY = "dmzs_pods_cache";
+const epById = (id) => eps.find((e) => e.id === id);
+const isEp = (t) => Boolean(t && t.pod);
 
 const REP = ["off", "all", "one"];
 const $ = (s) => document.querySelector(s);
@@ -474,7 +551,7 @@ const fmtSize = (b) => {
   const mo = b / 1048576;
   return mo < 1000 ? mo.toFixed(1).replace(".", ",") + " Mo" : (mo / 1024).toFixed(1).replace(".", ",") + " Go";
 };
-const byId = (id) => tracks.find((t) => t.id === id);
+const byId = (id) => tracks.find((t) => t.id === id) || epById(id);
 
 function artHTML(t) {
   if (!t) return "";
@@ -482,8 +559,10 @@ function artHTML(t) {
   // Uppercase first, escape second: the other way round would produce "&LT;"
   // for a title starting with "<".
   const letter = esc(((t.title || "?").trim()[0] || "?").toUpperCase());
+  // An episode shows its show's cover whatever its own status: the art
+  // exists as soon as the subscription does.
   return `<div class="fb" style="background:linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))">${letter}</div>` +
-         (t.status === "ready" ? `<img src="${artURL(t.id)}" alt="" loading="lazy" onerror="this.remove()">` : "");
+         (t.status === "ready" || isEp(t) ? `<img src="${artURL(t.id)}" alt="" loading="lazy" onerror="this.remove()">` : "");
 }
 
 let toastTimer;
@@ -563,7 +642,7 @@ function schedulePoll() {
 }
 
 // Connection back: pick the real library up again without a manual reload.
-addEventListener("online", () => load());
+addEventListener("online", () => { load(); loadPods(); });
 
 /* ═══ offline ══════════════════════════════════════════════
    Stored through the Cache API, played back from a blob: URL.
@@ -578,7 +657,7 @@ async function refreshOffline() {
     offline = new Set(
       keys.map((r) => new URL(r.url).pathname)
           .filter((p) => p.startsWith("/media/"))
-          .map((p) => p.slice(7))
+          .map((p) => p.split("/").pop()) // works for /media/<track> and /media/ep/<episode>
     );
   } catch { offline = new Set(); }
 }
@@ -708,15 +787,37 @@ function clearPos(id) {
   flushPos();
 }
 
-function savePos() {
+/* An episode's position also goes to D1, throttled, so the phone can pick
+   up where the desktop stopped — that sync is the point of podcasts. 30 s
+   between writes is nothing against the request allowance, and losing half
+   a minute of position in a crash costs nothing either. */
+let epStateSent = 0;
+function pushEpState(id, data, force = false) {
+  if (!force && Date.now() - epStateSent < 30000) return;
+  epStateSent = Date.now();
+  api(`/api/episodes/${id}/state`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).catch(() => {});
+}
+
+function savePos(force = false) {
   const id = queue[qi];
   const t = byId(id);
-  if (!t || !isMix(t)) return;
+  if (!t) return;
+  const ep = isEp(t);
+  if (!ep && !isMix(t)) return;
   const pos = audio.currentTime || 0;
   const dur = audio.duration && isFinite(audio.duration) ? audio.duration : t.duration || 0;
-  if (pos < POS_EDGE || (dur && pos > dur - POS_EDGE)) { clearPos(id); return; }
+  if (pos < POS_EDGE || (dur && pos > dur - POS_EDGE)) {
+    clearPos(id);
+    if (ep) { t.position = 0; pushEpState(id, { position: 0 }, force); }
+    return;
+  }
   positions[id] = Math.floor(pos);
   flushPos();
+  if (ep) { t.position = positions[id]; pushEpState(id, { position: positions[id] }, force); }
 }
 
 function renderMix() {
@@ -727,7 +828,8 @@ function renderMix() {
 
 async function toggleFav(id) {
   const t = byId(id);
-  if (!t) return;
+  if (!t || isEp(t)) return; // stars are a library thing
+
   t.fav = t.fav ? 0 : 1;
   // Local first, so the heart answers the tap; the server catches up after.
   saveTracks(tracks);
@@ -856,6 +958,7 @@ function emptyText() {
 }
 
 function renderList() {
+  if (podMode) { renderPodList(); return; }
   const rows = visible();
   const cur = queue[qi];
 
@@ -978,6 +1081,12 @@ function renderNow() {
   $("#npFav").classList.toggle("on", Boolean(t.fav));
   $("#npFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
 
+  // Episodes: no stars, but a playback speed. Tracks: the reverse.
+  $("#mFav").style.visibility = isEp(t) ? "hidden" : "";
+  $("#npFav").style.visibility = isEp(t) ? "hidden" : "";
+  $("#npRate").classList.toggle("show", isEp(t));
+  $("#npRate").textContent = fmtRate(podRate);
+
   const playing = !audio.paused;
   $("#mPlay").innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
   $("#npplay").innerHTML = playing ? ICON_PAUSE_L : ICON_PLAY_L;
@@ -1018,7 +1127,7 @@ function updateMediaSession(t) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: t.title,
       artist: t.artist || "",
-      album: "Library",
+      album: isEp(t) ? t.artist : "Library",
       // Small sizes matter too: without them, the compact player on the iOS
       // lock screen shows a grey square.
       artwork: [96, 128, 192, 256, 384, 512].map((s) => ({
@@ -1042,7 +1151,7 @@ function syncSessionState() {
     const d = audio.duration;
     if (d && isFinite(d)) {
       navigator.mediaSession.setPositionState({
-        duration: d, position: Math.min(audio.currentTime, d), playbackRate: 1,
+        duration: d, position: Math.min(audio.currentTime, d), playbackRate: audio.playbackRate || 1,
       });
     }
   } catch {}
@@ -1069,6 +1178,8 @@ async function loadInto(id) {
   const src = await srcFor(id);
   if (src.startsWith("blob:")) objectURL = src;
   audio.src = src;
+  // Speed belongs to podcasts; music always plays straight.
+  audio.playbackRate = isEp(byId(id)) ? podRate : 1;
 
   // Back where the set was left. currentTime cannot be set before the browser
   // knows the duration, hence the wait; the id is checked again there because
@@ -1097,7 +1208,7 @@ function countPlay() {
   const id = queue[qi];
   if (!id || id === countedId) return;
   const t = byId(id);
-  if (!t || t.status !== "ready") return;
+  if (!t || t.status !== "ready" || isEp(t)) return; // episodes have `played`, not a counter
 
   countedId = id;
   // Increment locally right away, so the display does not wait on the round trip.
@@ -1121,6 +1232,7 @@ async function play(id) {
   const t = byId(queue[qi]);
   if (!t) return;
   updateMediaSession(t);
+  audio.playbackRate = isEp(t) ? podRate : 1;
   try {
     await audio.play();
   } catch (e) {
@@ -1178,15 +1290,52 @@ audio.addEventListener("timeupdate", () => {
 });
 audio.addEventListener("playing", () => countPlay());
 audio.addEventListener("durationchange", () => { renderProgress(); syncSessionState(); });
-audio.addEventListener("ended", () => { clearPos(queue[qi]); next(true); });
+audio.addEventListener("ended", () => {
+  const t = byId(queue[qi]);
+  if (isEp(t)) {
+    // Listened to the end: finished, and next time starts from the top.
+    t.played = 1;
+    t.position = 0;
+    pushEpState(t.id, { position: 0, played: 1 }, true);
+  }
+  clearPos(queue[qi]);
+  next(true);
+});
 audio.addEventListener("play", () => { renderNow(); renderList(); syncSessionState(); });
-audio.addEventListener("pause", () => { savePos(); renderNow(); renderList(); syncSessionState(); });
+audio.addEventListener("pause", () => { savePos(true); renderNow(); renderList(); syncSessionState(); });
 audio.addEventListener("error", () => {
   if (audio.src) toast("This track could not be played");
 });
 
 /* ═══ events: list ═════════════════════════════════════════ */
 $("#list").addEventListener("click", (e) => {
+  if (podMode) {
+    // The overflow dots first: they live inside rows that also navigate.
+    const pm = e.target.closest("[data-podmenu]");
+    if (pm) { openPodMenu(pm.dataset.podmenu); return; }
+    const em = e.target.closest("[data-epmenu]");
+    if (em) { openEpMenu(em.dataset.epmenu); return; }
+    if (e.target.closest("#podBack")) { curPod = null; renderList(); return; }
+    if (e.target.closest("#podAdd")) {
+      openSheet("#podSheet");
+      setTimeout(() => $("#podUrl").focus(), 80);
+      return;
+    }
+    const pr = e.target.closest("[data-pod]");
+    if (pr) { curPod = pr.dataset.pod; renderList(); return; }
+    const er = e.target.closest("[data-ep]");
+    if (er) {
+      const ep = epById(er.dataset.ep);
+      if (!ep) return;
+      if (ep.status === "ready") { ep.id === queue[qi] ? toggle() : playEp(ep.id); return; }
+      if (ep.status === "queued" || ep.status === "fetching") { toast("Fetching this episode…"); return; }
+      if (ep.status === "error") { openEpMenu(ep.id); return; }
+      // 'new': tapping an episode means "I want to hear it" — fetch it.
+      fetchEp(ep.id);
+    }
+    return;
+  }
+
   const m = e.target.closest("[data-menu]");
   if (m) { openMenu(m.dataset.menu); return; }
   const r = e.target.closest(".row");
@@ -1270,7 +1419,7 @@ document.addEventListener("visibilitychange", () => {
 // Reloading mid bulk-download would silently lose the remaining tracks, so
 // Safari is asked to show its confirmation prompt.
 addEventListener("beforeunload", (e) => {
-  savePos();
+  savePos(true);
   if (bulk.on) { e.preventDefault(); e.returnValue = ""; }
 });
 
@@ -1306,6 +1455,17 @@ $("#mFav").addEventListener("click", (e) => {
 $("#npFav").addEventListener("click", () => {
   const t = byId(queue[qi]);
   if (t) toggleFav(t.id);
+});
+
+/* Playback speed, cycled rather than picked from a menu: four values, and
+   the whole point is changing it without leaving the player. */
+const RATES = [1, 1.25, 1.5, 2];
+$("#npRate").addEventListener("click", () => {
+  podRate = RATES[(RATES.indexOf(podRate) + 1) % RATES.length] || 1;
+  localStorage.setItem("dmzs_rate", String(podRate));
+  if (isEp(byId(queue[qi]))) audio.playbackRate = podRate;
+  renderNow();
+  toast(`Speed ${fmtRate(podRate)}`);
 });
 
 
@@ -1663,13 +1823,366 @@ $("#menuSheet").addEventListener("click", async (e) => {
   }
 });
 
+/* ═══ podcasts ═════════════════════════════════════════════ */
+const DOTS = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.5" r="1.7"/></svg>`;
+const ICON_CHECK = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
+const ICON_CLOUD_DL = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.6A4.5 4.5 0 0 0 17.5 8.4 6 6 0 0 0 6 10a4 4 0 0 0-2 7.4"/><path d="M12 11v7m0 0 2.5-2.5M12 18l-2.5-2.5"/></svg>`;
+const ICON_OFF_DOT = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v8m0 0 3-3m-3 3-3-3"/></svg>`;
+
+const fmtRate = (r) => (r === 1 ? "1×" : r + "×");
+
+function epDate(ms) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, sameYear
+    ? { day: "numeric", month: "short" }
+    : { day: "numeric", month: "short", year: "numeric" });
+}
+
+/* Podcasts replace the library rather than filter it, so the library's own
+   filters are dropped on the way in. Leaving one latched is invisible while
+   podcast mode hides both pills, and coming back would land on a filtered list
+   nobody asked for. */
+function clearLibraryFilters() {
+  favOnly = false;
+  mixOnly = false;
+  localStorage.setItem("dmzs_favonly", "0");
+  localStorage.setItem("dmzs_mixes", "0");
+  renderFav();
+  renderMix();
+}
+
+function renderPodPill() {
+  $("#podBtn").classList.toggle("on", podMode);
+  $("#podBtn").setAttribute("aria-pressed", podMode ? "true" : "false");
+  // Library-only controls make no sense over podcasts, and vice versa.
+  $("#sortBtn").hidden = podMode;
+  $("#favBtn").hidden = podMode;
+  $("#mixBtn").hidden = podMode;
+  document.querySelector(".actions").hidden = podMode;
+}
+
+/* Same plane rule as the track list: the last known state is kept on the
+   device, so episodes already downloaded stay listed and playable offline. */
+async function loadPods() {
+  try {
+    const res = await api("/api/podcasts");
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    pods = data.podcasts || [];
+    const names = Object.fromEntries(pods.map((p) => [p.id, p.title]));
+    eps = (data.episodes || []).map((e) => ({
+      ...e,
+      pod: e.podcast_id,
+      artist: names[e.podcast_id] || "Podcast", // what the player shows on line two
+    }));
+    // The server remembers where another device stopped. The bigger position
+    // wins, so a deliberate rewind on this device is not quietly undone.
+    let touched = false;
+    for (const e of eps) {
+      if (e.position > 0 && e.position > (positions[e.id] || 0)) {
+        positions[e.id] = e.position;
+        touched = true;
+      }
+    }
+    if (touched) flushPos();
+    podsLoaded = true;
+    try { localStorage.setItem(PODS_KEY, JSON.stringify({ pods, eps })); } catch {}
+  } catch (e) {
+    if (String(e.message) === "401") return;
+    if (!podsLoaded) {
+      try {
+        const c = JSON.parse(localStorage.getItem(PODS_KEY) || "{}");
+        pods = c.pods || [];
+        eps = c.eps || [];
+      } catch {}
+      podsLoaded = true;
+    }
+  }
+  if (podMode) renderList();
+  schedulePodPoll();
+}
+
+function schedulePodPoll() {
+  clearTimeout(podTimer);
+  const busy = eps.some((e) => e.status === "queued" || e.status === "fetching");
+  if (busy && navigator.onLine && document.visibilityState === "visible") {
+    podTimer = setTimeout(loadPods, 2500);
+  }
+}
+
+function podRow(p) {
+  const list = eps.filter((e) => e.pod === p.id);
+  const ready = list.filter((e) => e.status === "ready");
+  const fresh = ready.filter((e) => !e.played).length;
+  const h = hue(p.title);
+  const sub = p.last_error ? p.last_error : (p.author || `${list.length} episode${list.length !== 1 ? "s" : ""}`);
+  return `<div class="row${p.last_error ? " err" : ""}" data-pod="${p.id}">
+    <div class="art">
+      <div class="fb" style="background:linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))">${esc(((p.title || "?").trim()[0] || "?").toUpperCase())}</div>
+      <img src="/art/pod/${p.id}" alt="" loading="lazy" onerror="this.remove()">
+    </div>
+    <div class="info"><div class="ttl tr">${esc(p.title)}</div><div class="art2 tr">${esc(sub)}</div></div>
+    <div class="right">
+      ${fresh ? `<span class="pct num">${fresh} new</span>` : `<span class="dur num">${ready.length} ready</span>`}
+      <button class="dots" data-podmenu="${p.id}" aria-label="Options">${DOTS}</button>
+    </div>
+  </div>`;
+}
+
+function epRow(e) {
+  const busy = e.status === "queued" || e.status === "fetching";
+  const err = e.status === "error";
+  const isCur = e.id === queue[qi] && e.status === "ready";
+  const at = positions[e.id];
+  const sub = busy
+    ? (e.status === "queued" ? "Queued…" : "Fetching…")
+    : err ? (e.error || "Failed")
+    : [e.played ? "Played" : "", epDate(e.published_at), e.duration ? mmss(e.duration) : "", at ? `resumes at ${mmss(at)}` : ""]
+        .filter(Boolean).join(" · ");
+
+  let right;
+  if (busy) right = `<span class="pct num">…</span>`;
+  else if (err) right = `<span class="pct num" style="color:var(--red)">!</span>`;
+  else if (isCur) right = `<div class="eq"><i></i><i></i><i></i></div>`;
+  else if (e.status === "ready") right = `<span class="off${offline.has(e.id) ? " on" : ""}">${offline.has(e.id) ? ICON_CHECK : ICON_OFF_DOT}</span>`;
+  else right = `<span class="off">${ICON_CLOUD_DL}</span>`; // not in the cloud yet: tap to fetch
+
+  const pct = at && e.duration ? Math.min(100, Math.round((at / e.duration) * 100)) : 0;
+
+  return `<div class="row${isCur ? " cur" : ""}${isCur && !audio.paused ? " playing" : ""}${busy ? " busy" : ""}${err ? " err" : ""}${e.played ? " done" : ""}" data-ep="${e.id}">
+    <div class="art">${artHTML(e)}</div>
+    <div class="info"><div class="ttl tr">${esc(e.title)}</div><div class="art2 tr">${esc(sub)}</div></div>
+    <div class="right">
+      ${right}
+      <button class="dots" data-epmenu="${e.id}" aria-label="Options">${DOTS}</button>
+    </div>
+    ${pct && !busy && !err ? `<div class="rowbar"><i style="width:${pct}%"></i></div>` : ""}
+  </div>`;
+}
+
+function renderPodList() {
+  const q = $("#q").value.trim().toLowerCase();
+  let html;
+
+  if (curPod && !pods.some((p) => p.id === curPod)) curPod = null;
+
+  if (curPod) {
+    const pod = pods.find((p) => p.id === curPod);
+    let list = eps.filter((e) => e.pod === curPod);
+    if (q) list = list.filter((e) => (e.title + " " + (e.description || "")).toLowerCase().includes(q));
+    const kept = eps.filter((e) => e.pod === curPod && e.status === "ready").length;
+    html =
+      `<div class="row" id="podBack" style="height:46px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14 6-6 6 6 6"/></svg>
+        <div class="info"><div class="art2">All podcasts</div></div>
+        <button class="dots" data-podmenu="${pod.id}" aria-label="Show options">${DOTS}</button>
+      </div>` +
+      (list.length
+        ? list.map(epRow).join("")
+        : `<div class="empty">${q ? "No results." : "<b>No episodes.</b>The feed lists nothing playable."}</div>`);
+    $("#hmeta").textContent = `${pod.title} · ${kept} in the cloud`;
+  } else {
+    let list = pods;
+    if (q) list = list.filter((p) => (p.title + " " + (p.author || "")).toLowerCase().includes(q));
+    html =
+      `<div class="row addrow" id="podAdd" style="height:50px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <div class="info"><div class="ttl">Add a podcast</div></div>
+      </div>` +
+      (list.length
+        ? list.map(podRow).join("")
+        : q
+          ? `<div class="empty">No results.</div>`
+          : `<div class="empty"><b>No podcasts yet.</b>Add an RSS feed or an Apple Podcasts link.</div>`);
+    const ready = eps.filter((e) => e.status === "ready");
+    $("#hmeta").textContent = pods.length
+      ? `${pods.length} podcast${pods.length > 1 ? "s" : ""} · ${ready.length} episode${ready.length !== 1 ? "s" : ""} in the cloud · ${fmtSize(ready.reduce((s, e) => s + (e.size || 0), 0))}`
+      : "Podcasts";
+  }
+
+  $("#list").innerHTML = html;
+  $("#dlAll").hidden = true;
+}
+
+function playEp(id) {
+  const e = epById(id);
+  if (!e || e.status !== "ready") return;
+  // The queue is this show's stored episodes, in the order on screen, so
+  // "next" walks down the list the finger just came from.
+  queue = eps.filter((x) => x.pod === e.pod && x.status === "ready").map((x) => x.id);
+  qi = queue.indexOf(id);
+  queueSrc = e.artist;
+  play(id);
+}
+
+async function fetchEp(id) {
+  const e = epById(id);
+  if (!e) return;
+  e.status = "queued";
+  renderList();
+  toast("Fetching to the cloud…");
+  await api(`/api/episodes/${id}/fetch`, { method: "POST" }).catch(() => {});
+  loadPods();
+}
+
+/* -- show menu -- */
+let podMenuId = null;
+function openPodMenu(id) {
+  const p = pods.find((x) => x.id === id);
+  if (!p) return;
+  podMenuId = id;
+  const n = eps.filter((e) => e.pod === id).length;
+  $("#pmTtl").textContent = p.title;
+  $("#pmSub").textContent = `${p.author || "—"} · ${n} episode${n !== 1 ? "s" : ""} · keeps ${p.keep ?? 5} in the cloud`;
+  openSheet("#podMenu");
+}
+
+$("#podMenu").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-pa]");
+  if (!b || !podMenuId) return;
+  const id = podMenuId;
+  closeSheets();
+
+  if (b.dataset.pa === "refresh") {
+    toast("Checking the feed…");
+    const res = await api(`/api/podcasts/${id}/refresh`, { method: "POST" }).catch(() => null);
+    const d = res && res.ok ? await res.json().catch(() => ({})) : {};
+    toast(d.added ? `${d.added} new episode${d.added > 1 ? "s" : ""}` : "Nothing new");
+    loadPods();
+  }
+
+  if (b.dataset.pa === "unsub") {
+    const cur = byId(queue[qi]);
+    if (cur && cur.pod === id) {
+      audio.pause(); audio.removeAttribute("src");
+      qi = -1; queue = [];
+      $("#mini").classList.remove("up");
+    }
+    for (const ep of eps.filter((x) => x.pod === id)) {
+      dropOffline(ep.id).catch(() => {});
+      clearPos(ep.id);
+    }
+    await api(`/api/podcasts/${id}`, { method: "DELETE" }).catch(() => {});
+    pods = pods.filter((p) => p.id !== id);
+    eps = eps.filter((x) => x.pod !== id);
+    if (curPod === id) curPod = null;
+    toast("Unsubscribed");
+    renderList(); renderNow();
+  }
+});
+
+/* -- episode menu -- */
+let epMenuId = null;
+function openEpMenu(id) {
+  const ep = epById(id);
+  if (!ep) return;
+  epMenuId = id;
+  const ready = ep.status === "ready";
+  $("#emTtl").textContent = ep.title;
+  $("#emSub").textContent = ready
+    ? `${ep.artist} · ${mmss(ep.duration)} · ${fmtSize(ep.size)}`
+    : ep.status === "error" ? (ep.error || "Failed") : `${ep.artist} · not in the cloud yet`;
+  $("#emPlay").hidden = !ready;
+  $("#emFetch").hidden = ep.status !== "new" && ep.status !== "error";
+  $("#emFetchTxt").textContent = ep.status === "error" ? "Retry the fetch" : "Fetch to the cloud";
+  $("#emDl").hidden = !ready;
+  $("#emDlTxt").textContent = offline.has(id) ? "Remove from device" : "Download to device";
+  $("#emCloud").hidden = !ready;
+  $("#emMarkTxt").textContent = ep.played ? "Mark as unfinished" : "Mark as finished";
+  openSheet("#epMenu");
+}
+
+$("#epMenu").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-ea]");
+  if (!b || !epMenuId) return;
+  const id = epMenuId;
+  const ep = epById(id);
+  closeSheets();
+  if (!ep) return;
+  const a = b.dataset.ea;
+
+  if (a === "play") playEp(id);
+  if (a === "fetch") fetchEp(id);
+  if (a === "dl") toggleOffline(id);
+
+  if (a === "cloud") {
+    if (queue[qi] === id) {
+      audio.pause(); audio.removeAttribute("src");
+      qi = -1; queue = [];
+      $("#mini").classList.remove("up");
+    }
+    dropOffline(id).catch(() => {});
+    await api(`/api/episodes/${id}`, { method: "DELETE" }).catch(() => {});
+    ep.status = "new"; ep.size = 0;
+    toast("Removed from the cloud");
+    renderList();
+  }
+
+  if (a === "mark") {
+    ep.played = ep.played ? 0 : 1;
+    if (ep.played) { clearPos(id); ep.position = 0; }
+    pushEpState(id, ep.played ? { played: 1, position: 0 } : { played: 0 }, true);
+    toast(ep.played ? "Marked as finished" : "Marked as unfinished");
+    renderList();
+  }
+});
+
+/* -- subscribing -- */
+$("#podPaste").addEventListener("click", async () => {
+  try { $("#podUrl").value = (await navigator.clipboard.readText()).trim(); }
+  catch { toast("Clipboard not available"); }
+});
+$("#podUrl").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#podGo").click(); });
+
+$("#podGo").addEventListener("click", async () => {
+  const url = $("#podUrl").value.trim();
+  if (!url) return;
+  const err = $("#podErr");
+  err.classList.remove("show");
+  const btn = $("#podGo");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span>Subscribing…`;
+  let res = null;
+  try {
+    res = await api("/api/podcasts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  } catch {}
+  btn.disabled = false;
+  btn.textContent = "Subscribe";
+  if (!res || !res.ok) {
+    const d = res ? await res.json().catch(() => ({})) : {};
+    err.textContent = d.error || "Could not subscribe — is that a feed URL?";
+    err.classList.add("show");
+    return;
+  }
+  $("#podUrl").value = "";
+  closeSheets();
+  toast("Subscribed — fetching the latest episode…");
+  loadPods();
+});
+
+$("#podBtn").addEventListener("click", () => {
+  podMode = !podMode;
+  localStorage.setItem("dmzs_podmode", podMode ? "1" : "0");
+  curPod = null;
+  if (podMode) clearLibraryFilters();
+  renderPodPill();
+  renderList();
+  if (podMode) loadPods();
+});
+
 /* ═══ init ═════════════════════════════════════════════════ */
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("visibilitychange", () => {
   // Backgrounded is where an iOS app gets killed without warning, so the
   // position is written before the tab goes quiet rather than after.
-  if (document.visibilityState === "visible") load();
-  else savePos();
+  if (document.visibilityState === "visible") { load(); loadPods(); }
+  else savePos(true);
 });
 
 (async function init() {
@@ -1679,11 +2192,16 @@ document.addEventListener("visibilitychange", () => {
 
   renderSort();
   measureScrollbar();
+  // A device that was left in podcast mode before the line above existed can
+  // still hold a latched filter from that session; clear it before drawing.
+  if (podMode) clearLibraryFilters();
   renderFav();
   renderMix();
+  renderPodPill();
   repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
   await refreshOffline();
   await load();
+  loadPods();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});

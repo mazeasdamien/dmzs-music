@@ -133,6 +133,48 @@ rather than retrying a doomed download on every poll.
 
 ---
 
+## Podcasts
+
+The **Podcasts** pill swaps the library for your subscriptions. It is the one
+place the app accepts a pasted link, because there is no better way to hand
+over an RSS URL — either the feed itself or a link to the show's page on Apple
+Podcasts (the numeric id in that link resolves to the feed through Apple's
+public lookup, one request, no key).
+
+Podcasts do not touch the downloader, yt-dlp or the legal thicket above. An
+episode enclosure is a plain audio file on a plain CDN: the Worker fetches it
+itself, streams it straight into R2 without holding it in memory, and serves
+it back with the same Range handling as tracks. The machinery mirrors the
+tracks table on purpose — a status column, an atomic claim, a lease that
+returns stuck work to the queue — so anyone who has read one flow has read
+both.
+
+What downloads on its own is deliberately narrow: the latest episode when you
+subscribe, and anything genuinely newer that appears afterwards (a cron
+re-reads each feed hourly). The back-catalogue stays listed but not stored —
+tap an old episode and it is fetched on demand. R2 keeps the last **5**
+fetched episodes per show (the `keep` column in D1, per show, no UI on
+purpose), evicting the oldest *fetched* rather than the oldest *published*,
+so a back-catalogue episode you asked for is not thrown out the moment it
+arrives. Evicted episodes keep their row, and their resume position with it.
+
+Listening works like everything else here: tap to play, episodes cache to the
+device with the same Download entry, and they play offline through the same
+blob: path. Two things exist only for podcasts. The resume position is stored
+in **D1**, not on the device — unlike a mix, an episode is one continuous
+listen that hops between phone and desktop, so the bigger of the two positions
+wins and follows you. And the player header grows a **speed button** (1× to
+2×) that applies to episodes and never to music. Finishing an episode marks it
+played; the overflow menu can do it by hand, fetch or evict a stored copy, or
+unsubscribe (which removes the show's files from R2 too).
+
+If you are updating an existing deployment: the new tables ship in the same
+`schema.sql`, everything in it is `CREATE TABLE IF NOT EXISTS`, so it is one
+`npm run db:schema` followed by `npx wrangler deploy` — the deploy also
+installs the cron from `wrangler.jsonc` that keeps feeds fresh.
+
+---
+
 ## Why the downloader pulls instead of being pushed to
 
 This is the load-bearing decision of the project, and it solves two problems at

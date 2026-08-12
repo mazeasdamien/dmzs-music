@@ -24,3 +24,45 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tracks_status  ON tracks(status);
+
+-- Podcasts. Unlike tracks, episodes are fetched by the Worker itself (an
+-- enclosure is a plain audio URL, nothing to circumvent), so the downloader
+-- machine is not involved at all.
+
+CREATE TABLE IF NOT EXISTS podcasts (
+  id           TEXT PRIMARY KEY,              -- 12 hex chars, hash of feed_url
+  feed_url     TEXT NOT NULL UNIQUE,
+  title        TEXT NOT NULL DEFAULT '',
+  author       TEXT NOT NULL DEFAULT '',
+  image_url    TEXT NOT NULL DEFAULT '',      -- source of podart/<id>.jpg in R2
+  description  TEXT NOT NULL DEFAULT '',
+  keep         INTEGER NOT NULL DEFAULT 5,    -- episodes kept in R2 per show
+  created_at   INTEGER NOT NULL,
+  last_checked INTEGER,                       -- ms; hourly refresh bookkeeping
+  last_error   TEXT                           -- last refresh failure, if any
+);
+
+CREATE TABLE IF NOT EXISTS episodes (
+  id           TEXT PRIMARY KEY,              -- 16 hex chars, hash of podcast+guid
+  podcast_id   TEXT NOT NULL,
+  guid         TEXT NOT NULL,                 -- feed's own id, dedup key
+  title        TEXT NOT NULL DEFAULT '',
+  description  TEXT NOT NULL DEFAULT '',
+  audio_url    TEXT NOT NULL,
+  duration     INTEGER NOT NULL DEFAULT 0,    -- seconds
+  size         INTEGER NOT NULL DEFAULT 0,    -- bytes actually stored in R2
+  ext          TEXT    NOT NULL DEFAULT '',   -- mp3 | m4a | ogg
+  published_at INTEGER NOT NULL DEFAULT 0,    -- ms
+  status       TEXT    NOT NULL DEFAULT 'new',
+                                              -- new | queued | fetching | ready | error
+  error        TEXT,
+  position     INTEGER NOT NULL DEFAULT 0,    -- resume point in seconds, cross-device
+  played       INTEGER NOT NULL DEFAULT 0,    -- 1 once listened to the end
+  fetched_at   INTEGER,                       -- ms; retention evicts oldest-fetched
+  claimed_at   INTEGER,                       -- ms; fetch lease, NULL when free
+  created_at   INTEGER NOT NULL,
+  UNIQUE (podcast_id, guid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_episodes_pod    ON episodes(podcast_id, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_episodes_status ON episodes(status);

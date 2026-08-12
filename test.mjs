@@ -11,6 +11,7 @@ import {
   requestSession,
 } from "./src/auth.js";
 import { videoIdFrom, parseRange } from "./src/util.js";
+import { parseFeed, parseDuration, feedUrlFrom, extFor, decodeEntities, textOf } from "./src/feed.js";
 
 let pass = 0;
 let fail = 0;
@@ -128,6 +129,86 @@ ok((await requestSession(req2(null, expired), ENV)) === null, "X-Session expiré
 ok((await requestSession(req2(null, null), ENV)) === null, "ni cookie ni en-tête → rejet");
 ok((await requestSession(req2(`dmzs_session=${token}`, null), ENV)) !== null, "cookie seul → toujours accepté");
 ok((await requestSession(req2(null, token), { AUTH_SECRET: "" })) === null, "sans AUTH_SECRET → rejet");
+
+console.log("\n── flux RSS (podcasts) ─────────────────────");
+const FEED = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<channel>
+  <title>Tech &amp; Caf&#233;</title>
+  <itunes:author><![CDATA[Damien & friends]]></itunes:author>
+  <itunes:image href="https://cdn.example.com/cover.jpg"/>
+  <description><![CDATA[Un <b>podcast</b> de test.]]></description>
+  <item>
+    <title><![CDATA[Épisode 2 — l'avenir]]></title>
+    <guid isPermaLink="false">ep-002</guid>
+    <pubDate>Tue, 05 Aug 2026 06:00:00 GMT</pubDate>
+    <itunes:duration>1:02:03</itunes:duration>
+    <description>Deuxième épisode.</description>
+    <enclosure url="https://cdn.example.com/ep2.mp3?a=1&amp;b=2" length="52428800" type="audio/mpeg"/>
+  </item>
+  <item>
+    <title>Épisode 1</title>
+    <pubDate>Mon, 28 Jul 2026 06:00:00 GMT</pubDate>
+    <itunes:duration>45:10</itunes:duration>
+    <enclosure type='audio/x-m4a' url='https://cdn.example.com/ep1.m4a' length='0'/>
+  </item>
+  <item>
+    <title>Billet sans audio</title>
+    <guid>blog-001</guid>
+  </item>
+</channel>
+</rss>`;
+
+const feed = parseFeed(FEED);
+ok(feed !== null, "le flux est reconnu");
+eq(feed.title, "Tech & Café", "titre du canal, entités décodées");
+eq(feed.author, "Damien & friends", "auteur depuis un CDATA");
+eq(feed.image, "https://cdn.example.com/cover.jpg", "image itunes par attribut");
+eq(feed.description, "Un podcast de test.", "description sans balisage");
+eq(feed.episodes.length, 2, "l'item sans enclosure n'est pas un épisode");
+
+const [e2, e1] = feed.episodes;
+eq(e2.guid, "ep-002", "guid explicite");
+eq(e2.title, "Épisode 2 — l'avenir", "titre d'épisode depuis un CDATA");
+eq(e2.audioUrl, "https://cdn.example.com/ep2.mp3?a=1&b=2", "&amp; décodé dans l'URL audio");
+eq(e2.duration, 3723, "durée 1:02:03 → 3723 s");
+eq(e2.ext, "mp3", "extension depuis le type MIME");
+ok(e2.publishedAt > 0, "pubDate parsée");
+eq(e1.guid, "https://cdn.example.com/ep1.m4a", "guid absent → URL en secours");
+eq(e1.ext, "m4a", "audio/x-m4a → m4a");
+eq(e1.duration, 2710, "durée 45:10 → 2710 s");
+ok(e2.publishedAt > e1.publishedAt, "l'ordre du flux suit les dates");
+
+eq(parseFeed("<html><body>pas un flux</body></html>"), null, "une page HTML est rejetée");
+ok(parseFeed(`<rss><channel><title>Vide</title></channel></rss>`).episodes.length === 0, "canal sans items → zéro épisode");
+
+console.log("\n── durées itunes ───────────────────────────");
+eq(parseDuration("3723"), 3723, "secondes brutes");
+eq(parseDuration("62:03"), 3723, "mm:ss");
+eq(parseDuration("1:02:03"), 3723, "hh:mm:ss");
+eq(parseDuration(""), 0, "vide → 0");
+eq(parseDuration("n'importe quoi"), 0, "texte → 0");
+eq(parseDuration("12:xx"), 0, "mal formé → 0");
+
+console.log("\n── extensions ──────────────────────────────");
+eq(extFor("audio/mpeg", ""), "mp3", "audio/mpeg");
+eq(extFor("audio/mp4", ""), "m4a", "audio/mp4");
+eq(extFor("audio/ogg; codecs=opus", ""), "ogg", "audio/ogg");
+eq(extFor("", "https://x.example/e.m4a?t=1"), "m4a", "extension depuis l'URL");
+eq(extFor("application/octet-stream", "https://x.example/e"), "mp3", "inconnu → mp3");
+
+console.log("\n── entrée utilisateur (abonnement) ─────────");
+eq(feedUrlFrom("https://feeds.example.com/show.xml"), { url: "https://feeds.example.com/show.xml" }, "URL directe");
+eq(feedUrlFrom("  https://feeds.example.com/show.xml  "), { url: "https://feeds.example.com/show.xml" }, "espaces tolérés");
+eq(feedUrlFrom("https://podcasts.apple.com/fr/podcast/tech-caf%C3%A9/id1234567890"), { apple: "1234567890" }, "lien Apple Podcasts");
+eq(feedUrlFrom("ftp://x.example/feed"), null, "schéma non http rejeté");
+eq(feedUrlFrom("pas une url"), null, "texte quelconque rejeté");
+eq(feedUrlFrom(""), null, "vide rejeté");
+
+console.log("\n── entités ─────────────────────────────────");
+eq(decodeEntities("A &amp; B &lt;ok&gt; &#233;t&#xE9;"), "A & B <ok> été", "nommées, décimales, hexadécimales");
+eq(decodeEntities("&amp;lt;"), "&lt;", "un seul passage, jamais deux");
+eq(textOf("<![CDATA[  du <i>texte</i>   riche ]]>"), "du texte riche", "CDATA + balises + espaces");
 
 console.log(`\n${fail === 0 ? "✓" : "✗"} ${pass} assertions passées, ${fail} échec(s)\n`);
 process.exit(fail ? 1 : 0);
