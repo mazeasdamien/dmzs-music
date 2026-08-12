@@ -43,6 +43,11 @@ body{
   -webkit-font-smoothing:antialiased;overscroll-behavior:none;
   user-select:none;-webkit-user-select:none;
 }
+/* Almost everything here sets its own display, and every one of those rules
+   beats the browser's [hidden]{display:none}. An element hidden from script
+   then stays on screen and, worse, stays clickable. One !important at the top
+   is cheaper than remembering the escape hatch on each new rule. */
+[hidden]{display:none!important}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
 input{font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
 svg{display:block;flex:none}
