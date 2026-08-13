@@ -25,6 +25,30 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tracks_status  ON tracks(status);
 
+-- Playlists. A hand-made selection, in an order somebody chose — which is the
+-- one thing the library's own views cannot express: Recent, Most played and
+-- Mixes all derive their order from the tracks themselves.
+--
+-- Membership is a plain join table rather than a JSON column so that deleting
+-- a track cannot leave a dangling id behind (ON DELETE CASCADE does it).
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id         TEXT PRIMARY KEY,               -- 12 hex chars, hash of the name
+  name       TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+  playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+  track_id    TEXT NOT NULL REFERENCES tracks(id)    ON DELETE CASCADE,
+  -- Sparse on purpose: appending is MAX(position)+1 and never renumbers the
+  -- rows already there, so adding a track is one INSERT.
+  position    INTEGER NOT NULL,
+  PRIMARY KEY (playlist_id, track_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pltracks ON playlist_tracks(playlist_id, position);
+
 -- Podcasts. Unlike tracks, episodes are fetched by the Worker itself (an
 -- enclosure is a plain audio URL, nothing to circumvent), so the downloader
 -- machine is not involved at all.

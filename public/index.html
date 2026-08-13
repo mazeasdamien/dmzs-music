@@ -430,12 +430,29 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 18.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5"/></svg>
     <span id="mnDlTxt">Download to device</span>
   </button>
+  <button class="mi" data-a="pl" id="mnPl">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 12v8"/><circle cx="18" cy="20" r="1.6" fill="currentColor" stroke="none"/></svg>
+    <span id="mnPlTxt">Add to a playlist</span>
+  </button>
   <button class="mi" data-a="retry" id="mnRetry" hidden>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 20v-5h5"/></svg>Retry
   </button>
   <button class="mi del" data-a="del">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Delete
   </button>
+</div>
+
+<div class="sheet" id="plSheet">
+  <div class="grab"></div>
+  <div class="sh-t">Playlists</div>
+  <div class="sh-s tr" id="plSub" style="margin-bottom:10px"></div>
+  <div id="plPick"></div>
+  <div class="urlbox" style="margin-top:12px">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--t3)"><path d="M12 5v14M5 12h14"/></svg>
+    <input id="plName" type="text" placeholder="New playlist" maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="paste" id="plNew">Create</button>
+  </div>
+  <div class="formerr" id="plErr"></div>
 </div>
 
 <div class="sheet" id="podSheet">
@@ -518,6 +535,17 @@ let queueSrc = "Library";         // where the current queue was built from
 let shuffle = false, repeat = 0;  // 0 off · 1 playlist · 2 track
 let pollTimer = null;
 let objectURL = null;             // current blob: URL, to be revoked
+
+/* Playlists. A hand-made selection in a chosen order — the one thing the
+   library's own views cannot express, since Recent, Most played and Mixes all
+   derive their order from the tracks themselves.
+
+   `plItems` is id → [track ids], already in playlist order, because that order
+   is the whole point and re-deriving it on every render would not be. */
+let playlists = [], plItems = {};
+let plOnly = localStorage.getItem("dmzs_playlist") || "";  // open playlist, "" for none
+const plById = (id) => playlists.find((p) => p.id === id);
+const plHas = (plId, trackId) => (plItems[plId] || []).includes(trackId);
 
 /* Podcasts */
 let pods = [], eps = [];
@@ -636,6 +664,71 @@ async function load() {
   autoSweep();
 }
 
+/* Same plane rule as the library: the membership is cached on the device, so
+   an open playlist still lists its tracks with no connection. */
+const PL_KEY = "dmzs_playlists";
+
+function applyPlaylists(data) {
+  playlists = data.playlists || [];
+  plItems = {};
+  for (const p of playlists) plItems[p.id] = [];
+  // The server returns the rows already ordered by position, so pushing in
+  // arrival order is the playlist order.
+  for (const it of data.items || []) (plItems[it.playlist_id] ||= []).push(it.track_id);
+  // A playlist deleted from another device must not leave this one showing a
+  // pill for a list that no longer exists.
+  if (plOnly && !plById(plOnly)) setPlaylist("");
+}
+
+async function loadPlaylists() {
+  try {
+    const res = await api("/api/playlists");
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    applyPlaylists(data);
+    try { localStorage.setItem(PL_KEY, JSON.stringify(data)); } catch {}
+  } catch (e) {
+    if (String(e.message) === "401") return;
+    if (!playlists.length) {
+      try { applyPlaylists(JSON.parse(localStorage.getItem(PL_KEY) || "{}")); } catch {}
+    }
+  }
+  renderPlPills();
+  renderList();
+}
+
+/* One pill per playlist, after the fixed ones. They are rebuilt rather than
+   patched: a handful of buttons is cheaper to recreate than to diff. */
+function renderPlPills() {
+  for (const el of document.querySelectorAll("[data-pl-pill]")) el.remove();
+  const row = $("#podBtn").parentNode;
+  for (const p of playlists) {
+    const b = document.createElement("button");
+    b.className = "autopill";
+    b.dataset.plPill = p.id;
+    b.textContent = p.name;
+    b.title = `Play the ${p.name} playlist, in its own order`;
+    b.hidden = podMode;
+    b.classList.toggle("on", plOnly === p.id && !podMode);
+    b.setAttribute("aria-pressed", plOnly === p.id && !podMode ? "true" : "false");
+    row.appendChild(b);
+  }
+}
+
+/* Opening a playlist and the Mixes view are the same kind of move — each
+   replaces the library rather than narrowing it — so one turns the other off
+   rather than stacking into a list of mixes-that-are-also-in-2010. */
+function setPlaylist(id) {
+  plOnly = id;
+  localStorage.setItem("dmzs_playlist", id);
+  if (id && mixOnly) {
+    mixOnly = false;
+    localStorage.setItem("dmzs_mixes", "0");
+    renderMix();
+  }
+  renderPlPills();
+}
+
 function schedulePoll() {
   clearTimeout(pollTimer);
   const busy = tracks.some((t) => t.status === "pending" || t.status === "downloading");
@@ -647,7 +740,7 @@ function schedulePoll() {
 }
 
 // Connection back: pick the real library up again without a manual reload.
-addEventListener("online", () => { load(); loadPods(); });
+addEventListener("online", () => { load(); loadPods(); loadPlaylists(); });
 
 /* ═══ offline ══════════════════════════════════════════════
    Stored through the Cache API, played back from a blob: URL.
@@ -931,11 +1024,25 @@ async function srcFor(id) {
 /* ═══ rendering ════════════════════════════════════════════ */
 function visible() {
   const q = $("#q").value.trim().toLowerCase();
-  // A search deliberately ignores the mixes split and looks through the whole
-  // library: refusing to find a mix by name would read as the track being lost.
-  let list = q
-    ? tracks.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q))
-    : tracks.filter((t) => isMix(t) === mixOnly);
+  let list;
+
+  if (plOnly) {
+    // A playlist is an explicit selection, so the ten-minute split does not
+    // apply to it: a set somebody put in the list on purpose belongs in the
+    // list. Ordered by position, which is why this maps ids to tracks rather
+    // than filtering `tracks` — that would give the library's order back.
+    list = (plItems[plOnly] || []).map(byId).filter(Boolean);
+    // And the search stays inside it. Elsewhere a search looks through
+    // everything, but inside a named list "no results" has to mean "not in
+    // this list" — leaving the playlist is how you search the rest.
+    if (q) list = list.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q));
+  } else {
+    // A search deliberately ignores the mixes split and looks through the whole
+    // library: refusing to find a mix by name would read as the track being lost.
+    list = q
+      ? tracks.filter((t) => (t.title + " " + t.artist).toLowerCase().includes(q))
+      : tracks.filter((t) => isMix(t) === mixOnly);
+  }
 
   // Filtering here rather than at render time is what makes "play only the
   // favourites" work: buildQueue() reads this same list.
@@ -956,6 +1063,10 @@ const playable = () => visible().filter((t) => t.status === "ready");
    a search found nothing, or the library really is new. */
 function emptyText() {
   if ($("#q").value.trim()) return "No results.";
+  if (plOnly && !favOnly) {
+    const n = plById(plOnly)?.name || "This playlist";
+    return `<b>${esc(n)} is empty.</b>Add tracks from the ⋮ menu on any row.`;
+  }
   if (favOnly) return "<b>No favourites here.</b>Swipe a row left to star a track.";
   if (mixOnly) return "<b>No mixes yet.</b>Anything over ten minutes lands here.";
   if (tracks.length) return "<b>Nothing under ten minutes.</b>The library is all in Mixes.";
@@ -1164,7 +1275,9 @@ function syncSessionState() {
 
 /* ═══ playback ═════════════════════════════════════════════ */
 function buildQueue(startId) {
-  queueSrc = mixOnly ? "Mixes" : favOnly ? "Favourites" : "Library";
+  queueSrc = plOnly
+    ? (plById(plOnly)?.name || "Playlist")
+    : mixOnly ? "Mixes" : favOnly ? "Favourites" : "Library";
   let ids = playable().map((t) => t.id);
   if (shuffle) {
     for (let i = ids.length - 1; i > 0; i--) {
@@ -1402,10 +1515,24 @@ $("#favBtn").addEventListener("click", () => {
 $("#mixBtn").addEventListener("click", () => {
   mixOnly = !mixOnly;
   localStorage.setItem("dmzs_mixes", mixOnly ? "1" : "0");
+  // Mixes and an open playlist both replace the library, so they take turns.
+  if (mixOnly && plOnly) setPlaylist("");
   renderMix();
   renderList();
   if (mixOnly && !tracks.some(isMix)) toast("Nothing over ten minutes yet");
   else toast(mixOnly ? "Mixes · over ten minutes" : "Back to the library");
+});
+
+// Delegated, because the playlist pills are rebuilt whenever the lists change.
+$("#podBtn").parentNode.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pl-pill]");
+  if (!b) return;
+  const id = b.dataset.plPill;
+  const name = plById(id)?.name || "Playlist";
+  setPlaylist(plOnly === id ? "" : id);
+  renderList();
+  if (!plOnly) toast("Back to the library");
+  else toast(`${name} · ${(plItems[id] || []).length} track${(plItems[id] || []).length > 1 ? "s" : ""}`);
 });
 
 /* Away from the tab, timeupdate is throttled while the audio keeps playing, so
@@ -1800,6 +1927,7 @@ $("#menuSheet").addEventListener("click", async (e) => {
   if (action === "play") { play(id); return; }
   if (action === "fav") { toggleFav(id); return; }
   if (action === "dl") { toggleOffline(id); return; }
+  if (action === "pl") { openPlSheet(id); return; }
   if (action === "retry") {
     await api("/api/tracks", {
       method: "POST",
@@ -1823,9 +1951,105 @@ $("#menuSheet").addEventListener("click", async (e) => {
     const cur = queue[qi];
     queue = queue.filter((x) => x !== id);
     qi = cur ? queue.indexOf(cur) : -1;
+    // The server drops the membership rows; the local copy has to follow, or
+    // an open playlist keeps a row for a track that no longer exists.
+    for (const k of Object.keys(plItems)) plItems[k] = plItems[k].filter((x) => x !== id);
     toast("Deleted");
     renderList(); renderNow();
   }
+});
+
+/* ═══ playlists ════════════════════════════════════════════ */
+let plTrackId = null;   // the track the sheet is acting on
+
+function openPlSheet(id) {
+  const t = byId(id);
+  if (!t) return;
+  plTrackId = id;
+  $("#plSub").textContent = t.title;
+  $("#plName").value = "";
+  $("#plErr").classList.remove("show");
+  renderPlPick();
+  openSheet("#plSheet");
+}
+
+/* One row per playlist, ticked when the track is already in it. Tapping a row
+   toggles membership, so the same sheet adds and removes. */
+function renderPlPick() {
+  $("#plPick").innerHTML = playlists.length
+    ? playlists.map((p) => {
+        const has = plHas(p.id, plTrackId);
+        return `<button class="mi" data-plpick="${p.id}">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${
+            has ? `<path d="m5 12.5 4.5 4.5L19 7.5"/>` : `<path d="M12 5v14M5 12h14"/>`
+          }</svg>
+          <span style="flex:1;text-align:left">${esc(p.name)}</span>
+          <span class="meta" style="color:var(--t3)">${(plItems[p.id] || []).length}</span>
+        </button>`;
+      }).join("")
+    : `<div class="sh-s" style="padding:6px 0 2px">No playlists yet. Name one below.</div>`;
+}
+
+$("#plPick").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-plpick]");
+  if (!b || !plTrackId) return;
+  const plId = b.dataset.plpick;
+  const id = plTrackId;
+  const name = plById(plId)?.name || "playlist";
+  const had = plHas(plId, id);
+
+  // Local first, same as starring: the sheet answers the tap and the server
+  // catches up. A failure puts the row back rather than lying about it.
+  plItems[plId] = had
+    ? (plItems[plId] || []).filter((x) => x !== id)
+    : [...(plItems[plId] || []), id];
+  renderPlPick();
+  renderList();
+  toast(had ? `Removed from ${name}` : `Added to ${name}`);
+
+  try {
+    const res = had
+      ? await api(`/api/playlists/${plId}/tracks/${id}`, { method: "DELETE" })
+      : await api(`/api/playlists/${plId}/tracks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${id}` }),
+        });
+    if (!res.ok) throw new Error(res.status);
+  } catch {
+    plItems[plId] = had
+      ? [...(plItems[plId] || []), id]
+      : (plItems[plId] || []).filter((x) => x !== id);
+    renderPlPick();
+    renderList();
+    toast("That did not reach the server");
+  }
+});
+
+$("#plNew").addEventListener("click", async () => {
+  const name = $("#plName").value.trim();
+  const err = $("#plErr");
+  if (!name) { err.textContent = "Give it a name first."; err.classList.add("show"); return; }
+  err.classList.remove("show");
+  try {
+    const res = await api("/api/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    $("#plName").value = "";
+    await loadPlaylists();
+    renderPlPick();
+    toast(`${name} created`);
+  } catch {
+    err.textContent = "Could not create it. Check the connection.";
+    err.classList.add("show");
+  }
+});
+
+$("#plName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("#plNew").click(); }
 });
 
 /* ═══ podcasts ═════════════════════════════════════════════ */
@@ -1856,6 +2080,7 @@ function clearLibraryFilters() {
   localStorage.setItem("dmzs_mixes", "0");
   renderFav();
   renderMix();
+  setPlaylist("");
 }
 
 function renderPodPill() {
@@ -1865,6 +2090,7 @@ function renderPodPill() {
   $("#sortBtn").hidden = podMode;
   $("#favBtn").hidden = podMode;
   $("#mixBtn").hidden = podMode;
+  for (const el of document.querySelectorAll("[data-pl-pill]")) el.hidden = podMode;
   document.querySelector(".actions").hidden = podMode;
 }
 
@@ -2186,7 +2412,7 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("visibilitychange", () => {
   // Backgrounded is where an iOS app gets killed without warning, so the
   // position is written before the tab goes quiet rather than after.
-  if (document.visibilityState === "visible") { load(); loadPods(); }
+  if (document.visibilityState === "visible") { load(); loadPods(); loadPlaylists(); }
   else savePos(true);
 });
 
@@ -2205,6 +2431,10 @@ document.addEventListener("visibilitychange", () => {
   renderPodPill();
   repeat = Number(localStorage.getItem("dmzs_repeat")) || 0;
   await refreshOffline();
+  // Before load(), so the first render of an open playlist already knows
+  // which tracks are in it rather than drawing an empty list and correcting
+  // itself a moment later.
+  await loadPlaylists();
   await load();
   loadPods();
 

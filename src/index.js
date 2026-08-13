@@ -625,8 +625,116 @@ async function handleApi(request, env, path, ctx) {
     const row = await env.DB.prepare("SELECT ext FROM tracks WHERE id = ?").bind(id).first();
     if (row?.ext) await env.MEDIA.delete(`audio/${id}.${row.ext}`);
     await env.MEDIA.delete(`art/${id}.jpg`);
-    await env.DB.prepare("DELETE FROM tracks WHERE id = ?").bind(id).run();
+    // Membership goes too. The foreign key would cascade on its own, but only
+    // while the pragma is on: doing it here makes a deleted track leave no
+    // trace in a playlist regardless.
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM playlist_tracks WHERE track_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM tracks WHERE id = ?").bind(id),
+    ]);
     return json({ ok: true });
+  }
+
+  /* ── playlists ── */
+
+  // GET /api/playlists — the lists and their membership, one payload.
+  // Membership comes back flat rather than nested: the app keeps a plain
+  // id → [track ids] map, and one array is cheaper to rebuild than a tree.
+  if (path === "/api/playlists" && request.method === "GET") {
+    const [p, m] = await env.DB.batch([
+      env.DB.prepare("SELECT id, name, created_at FROM playlists ORDER BY created_at"),
+      env.DB.prepare(
+        `SELECT playlist_id, track_id FROM playlist_tracks
+          ORDER BY playlist_id, position`
+      ),
+    ]);
+    return json({ playlists: p.results ?? [], items: m.results ?? [] });
+  }
+
+  // POST /api/playlists { name } — idempotent: the id is a hash of the name,
+  // so asking twice returns the same playlist instead of a second empty one.
+  if (path === "/api/playlists" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const name = String(b?.name ?? "").trim().slice(0, 60);
+    if (!name) return json({ error: "A playlist needs a name" }, 400);
+    const id = await hashHex(`pl|${name.toLowerCase()}`, 12);
+    await env.DB.prepare(
+      `INSERT INTO playlists (id, name, created_at) VALUES (?,?,?)
+         ON CONFLICT(id) DO NOTHING`
+    )
+      .bind(id, name, Date.now())
+      .run();
+    return json({ id, name }, 201);
+  }
+
+  // DELETE /api/playlists/:id — the list, not the tracks in it.
+  const plDel = path.match(/^\/api\/playlists\/([a-f0-9]{12})$/);
+  if (plDel && request.method === "DELETE") {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").bind(plDel[1]),
+      env.DB.prepare("DELETE FROM playlists WHERE id = ?").bind(plDel[1]),
+    ]);
+    return json({ ok: true });
+  }
+
+  // POST /api/playlists/:id/tracks { url } — queue the track if the library
+  // has never seen it, then append it. One call covers "add this YouTube link
+  // to 2010", which is what filling a playlist from a tracklist actually is.
+  const plAdd = path.match(/^\/api\/playlists\/([a-f0-9]{12})\/tracks$/);
+  if (plAdd && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const trackId = videoIdFrom(b?.url);
+    if (!trackId) return json({ error: "Unrecognized YouTube link" }, 400);
+
+    const pl = await env.DB.prepare("SELECT id FROM playlists WHERE id = ?")
+      .bind(plAdd[1])
+      .first();
+    if (!pl) return json({ error: "Unknown playlist" }, 404);
+
+    const known = await env.DB.prepare("SELECT id FROM tracks WHERE id = ?")
+      .bind(trackId)
+      .first();
+    if (!known) {
+      // An optional title, used only as the placeholder until the downloader
+      // reports the real one. Filling a playlist from a tracklist queues a
+      // hundred rows at once, and a hundred rows all reading "Loading…" is a
+      // list you cannot check; the caller already knows what it asked for.
+      const placeholder = String(b?.title || "").trim().slice(0, 300) || "Loading…";
+      await env.DB.prepare(
+        `INSERT INTO tracks (id,title,artist,status,stage,created_at)
+         VALUES (?,?,?,'pending',?,?)`
+      )
+        .bind(trackId, placeholder, "", "Waiting for the downloader…", Date.now())
+        .run();
+    }
+
+    // Appended at the end, and adding it twice is not an error: the primary
+    // key keeps one row and the position it already had.
+    const last = await env.DB.prepare(
+      "SELECT MAX(position) AS p FROM playlist_tracks WHERE playlist_id = ?"
+    )
+      .bind(plAdd[1])
+      .first();
+    await env.DB.prepare(
+      `INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?,?,?)
+         ON CONFLICT(playlist_id, track_id) DO NOTHING`
+    )
+      .bind(plAdd[1], trackId, (last?.p ?? -1) + 1)
+      .run();
+
+    return json({ id: trackId, queued: !known }, 201);
+  }
+
+  // DELETE /api/playlists/:id/tracks/:trackId — out of the list, still in the
+  // library. Removing from a playlist is not deleting.
+  const plRm = path.match(/^\/api\/playlists\/([a-f0-9]{12})\/tracks\/([\w-]{11})$/);
+  if (plRm && request.method === "DELETE") {
+    const r = await env.DB.prepare(
+      "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?"
+    )
+      .bind(plRm[1], plRm[2])
+      .run();
+    return json({ ok: Boolean(r.meta?.changes) });
   }
 
   /* ── podcasts ── */

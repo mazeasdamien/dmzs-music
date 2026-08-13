@@ -123,6 +123,25 @@ desktop stopped, and a single shared value would have them overwrite each
 other. The first and last minute are never stored, being indistinguishable from
 the start and the end.
 
+A **playlist** gets a pill of its own, after the fixed ones. Tapping it swaps
+the library for that list, in the order the list was written rather than any
+order the library could derive — which is the whole reason playlists exist
+here, since Recent, Most played and Mixes all take their order from the tracks
+themselves. The queue follows, as everywhere else.
+
+Two rules keep a playlist from being a fourth kind of filter. The ten-minute
+split does not apply inside one: a set put in a list on purpose belongs in that
+list, so opening a playlist and opening Mixes take turns rather than stack. And
+search stays inside the open playlist, unlike everywhere else, because in a
+named list "no results" has to mean "not in this list" — leaving the playlist
+is how you search the rest.
+
+Membership is edited from the **⋮ menu** on any row, which lists every playlist
+with a tick against the ones the track is already in, and takes the name of a
+new one. Removing a track from a playlist is not deleting it; deleting it from
+the library does remove it from every playlist. Re-adding appends, so a track
+taken out and put back lands at the end.
+
 In the full-screen player: **swipe down** to close, **left and right** to
 change track, the **heart** stars what is playing, and the **repeat button**
 cycles off → whole queue → this track forever.
@@ -171,7 +190,47 @@ unsubscribe (which removes the show's files from R2 too).
 If you are updating an existing deployment: the new tables ship in the same
 `schema.sql`, everything in it is `CREATE TABLE IF NOT EXISTS`, so it is one
 `npm run db:schema` followed by `npx wrangler deploy` — the deploy also
-installs the cron from `wrangler.jsonc` that keeps feeds fresh.
+installs the cron from `wrangler.jsonc` that keeps feeds fresh. The same is
+true of the `playlists` tables.
+
+---
+
+## Filling a playlist from a tracklist
+
+Adding a hundred tracks through the extension, one YouTube page at a time, is
+not a thing anyone will do. `scripts/seed-playlist.mjs` takes a JSON file and
+does it in one pass:
+
+```bash
+BOOTSTRAP_KEY=... node scripts/seed-playlist.mjs playlists/2010.json
+```
+
+```json
+{ "name": "2010", "tracks": [{ "id": "dQw4w9WgXcQ", "title": "Artist - Title" }] }
+```
+
+The `id` is the YouTube video id. `title` is only a placeholder, shown until
+the downloader reports the real one — worth setting, because a hundred rows all
+reading "Loading…" is a list you cannot check while it fills.
+
+It talks to the Worker over HTTPS exactly as the extension does, so it needs
+the activation key and nothing else: no Cloudflare API token, no database
+permissions, and it works against production from anywhere. Every insert
+ignores conflicts, so re-running after a half-finished pass costs nothing and
+duplicates nothing.
+
+To turn "Artist - Title" lines into video ids in the first place, yt-dlp's own
+search does it without an API key, and it is already installed next to the
+downloader:
+
+```bash
+downloader/.venv/Scripts/python -m yt_dlp --flat-playlist --print id "ytsearch1:Avicii - Levels"
+```
+
+`--flat-playlist` keeps it to the search results page, so a hundred lookups
+cost a hundred cheap requests rather than a hundred watch pages. The module
+form rather than the `yt-dlp` console script: the wrapper exits silently under
+some shells on Windows, and `python -m` never does.
 
 ---
 
