@@ -11,7 +11,7 @@
  * not use Range requests).
  */
 
-const SHELL = "dmzs-shell-v3";
+const SHELL = "dmzs-shell-v4";
 const ART = "dmzs-art-v3";
 
 // MUST match MEDIA_CACHE in index.html.

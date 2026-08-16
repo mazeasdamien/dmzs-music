@@ -1,11 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Même marque que icon-512.png, mais resserrée : à 16 px, la marge
-       généreuse de l'icône d'écran d'accueil réduirait les barres à une bouillie. -->
+  <!-- Même marque que icon-512.png (croche), mais resserrée : à 16 px, la marge
+       généreuse de l'icône d'écran d'accueil réduirait la note à une bouillie. -->
   <rect width="32" height="32" rx="7" fill="#09090b"/>
   <g fill="#f0a04b">
-    <rect x="4.5" y="12.5" width="4" height="7"  rx="2"/>
-    <rect x="11"  y="8.5"  width="4" height="15" rx="2"/>
-    <rect x="17.5" y="4.5" width="4" height="23" rx="2"/>
-    <rect x="24"  y="10.5" width="4" height="11" rx="2"/>
+    <ellipse cx="12.5" cy="24.8" rx="4.9" ry="3.7" transform="rotate(-16 12.5 24.8)"/>
+    <line x1="16.3" y1="4.9" x2="16.3" y2="24.6" stroke="#f0a04b" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M16.5 5.1 c4.8 1.7 7.1 4.8 6.6 9.2" stroke="#f0a04b" stroke-width="3" stroke-linecap="round" fill="none"/>
   </g>
 </svg>
