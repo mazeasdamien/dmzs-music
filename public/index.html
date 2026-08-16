@@ -258,8 +258,14 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    element makes the compositor recompute the blur every single frame, which
    on a phone costs more than the whole player is worth; a radial-gradient
    fading to transparent is already soft, and moving it is free. */
+/* The size is not a taste decision, it is arithmetic. The pools are centred on
+   the cover and the cover is opaque, so a lit radius shorter than half the
+   artwork is a light nobody will ever see. At 132% with the gradient dying at
+   64%, the lit radius came out 25px INSIDE the cover's own edge on a phone,
+   and all that ever escaped was a corner during a beat. It now reaches some
+   70px past the artwork at rest and past 100px on a kick. */
 #nphalo{
-  position:absolute;left:50%;top:50%;width:min(132%,500px);aspect-ratio:1;
+  position:absolute;left:50%;top:50%;width:min(158%,540px);aspect-ratio:1;
   transform:translate(-50%,-50%);pointer-events:none;
   opacity:0;transition:opacity .7s ease;
 }
@@ -284,7 +290,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 }
 #nphalo i{
   position:absolute;inset:0;display:block;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 64%);
+  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 78%);
   mix-blend-mode:screen;will-change:transform;
 }
 /* Three periods that share no common multiple, so the drift never visibly
@@ -312,8 +318,8 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   background-image:
     repeating-linear-gradient(0deg,rgba(0,0,0,.72) 0 1px,transparent 1px 4px),
     repeating-linear-gradient(90deg,rgba(255,45,45,.32) 0 1px,rgba(40,255,90,.32) 1px 2px,rgba(60,110,255,.32) 2px 3px);
-  -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 38%,transparent 62%);
-  mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 38%,transparent 62%);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 46%,transparent 74%);
+  mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 46%,transparent 74%);
   opacity:calc(.35 + var(--pulse,0) * .65);
   transition:opacity .09s ease-out;
   mix-blend-mode:multiply;
@@ -330,7 +336,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    the screen: the glow belongs to the cover, and follows it up and down as the
    player's height changes. */
 .npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px;position:relative}
-.npart .box{width:min(100%,340px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
+/* Short of the full width on purpose: the artwork stops covering the light it
+   is meant to be casting, and the glow has somewhere to land. */
+.npart .box{width:min(88%,312px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
 #np:not(.playing) .npart .box{transform:scale(.88)}
 /* position:relative is required: .fb is position:absolute and would paint ON
    TOP of the image without it, so the artwork exists but stays hidden behind
