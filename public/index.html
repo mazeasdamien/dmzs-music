@@ -2475,7 +2475,14 @@ async function deleteTrack(id) {
   const res = await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => null);
   if (!res || !res.ok) { toast("The server refused the deletion"); return false; }
 
-  if (queue[qi] === id) stopPlayback();
+  // Where playback goes when the track being thrown out is the one playing.
+  // Worked out before the queue loses the row, and it wraps the way "next"
+  // does, so deleting the last of a queue lands on the first.
+  const wasCurrent = queue[qi] === id;
+  const wasPlaying = wasCurrent && !audio.paused;
+  const heir = wasCurrent ? queue[qi + 1] || queue.find((x) => x !== id) || null : null;
+  const cur = wasCurrent ? null : queue[qi];
+
   await dropOffline(id).catch(() => {});
   await dropCachedArt(artURL(id));
   clearPos(id);
@@ -2486,13 +2493,26 @@ async function deleteTrack(id) {
   // is what a reload reads first. Without this the row comes back on the
   // next start with no connection, which is the opposite of permanent.
   saveTracks(tracks);
-  // qi is an index, so removing anything ahead of it in the queue shifts it
-  // onto the wrong track: the bar would name the next one while the audio
-  // kept playing the current one, and "next" would skip a track. Follow the
-  // id across the filter instead of trusting the position.
-  const cur = queue[qi];
   queue = queue.filter((x) => x !== id);
-  qi = cur ? queue.indexOf(cur) : -1;
+
+  if (!wasCurrent) {
+    // qi is an index, so removing anything ahead of it in the queue shifts it
+    // onto the wrong track: the bar would name the next one while the audio
+    // kept playing the current one, and "next" would skip a track. Follow the
+    // id across the filter instead of trusting the position.
+    qi = cur ? queue.indexOf(cur) : -1;
+  } else if (heir) {
+    // Deleting what is playing is not a reason to stop the music or to throw
+    // the player away: it carries on to the next track, and the full-screen
+    // view stays where it was. A track that was paused stays paused — the
+    // next one is loaded and waiting, not started behind your back.
+    qi = queue.indexOf(heir);
+    if (wasPlaying) await play(heir);
+    else await loadInto(heir);
+  } else {
+    // Nothing left to move on to. Now the player has earned its dismissal.
+    stopPlayback();
+  }
   // The server drops the membership rows; the local copy has to follow, or
   // an open playlist keeps a row for a track that no longer exists.
   for (const k of Object.keys(plItems)) plItems[k] = plItems[k].filter((x) => x !== id);
