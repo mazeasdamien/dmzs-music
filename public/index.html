@@ -229,52 +229,102 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #npbg{position:absolute;inset:0;z-index:-1;background-size:cover;background-position:center;filter:blur(58px) saturate(1.5) brightness(.42);transform:scale(1.5);opacity:.85}
 #npbg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,9,11,.35),rgba(9,9,11,.9))}
 
-.nphead{display:flex;align-items:center;justify-content:space-between;flex:none;height:38px;margin:0 -8px}
-.nphead .lbl{font-size:11px;font-weight:600;letter-spacing:.075em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+/* Three columns rather than space-between, and the outer two share a width.
+   Under space-between the label only lands in the middle while both sides
+   weigh the same, so the day the right side gained a second button the label
+   drifted left. A grid centres it on the screen whatever is beside it. */
+.nphead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;flex:none;height:38px;margin:0 -8px}
+.nphead .lbl{font-size:11px;font-weight:600;letter-spacing:.075em;text-transform:uppercase;color:rgba(255,255,255,.55);text-align:center}
 .nphead .iconbtn{background:rgba(255,255,255,.1)}
+#npClose{justify-self:start}
 /* Speed and the overflow menu share the right slot. The speed button keeps its
-   space when hidden (visibility, not display), so the label stays put whether
-   a podcast or a track is playing. */
-.nptools{display:flex;align-items:center;gap:7px;flex:none}
+   space when hidden (visibility, not display), so the row does not reflow
+   between a podcast and a track. */
+.nptools{display:flex;align-items:center;gap:7px;justify-self:end}
 
 /* ─── ambient halo ────────────────────────────────────────────
-   The wall behind the record, lit by the record. Three soft pools of colour
-   taken from the cover itself, drifting slowly behind the artwork.
+   The wall behind the record, lit by the record, and beating with it. Pools of
+   colour taken from the cover itself; the bass drives their size and
+   brightness, the treble a quicker shimmer on top.
+
+   Three nested layers, because each one moves for a different reason and
+   fighting over a single transform would mean recomputing all of it every
+   frame:
+     #nphalo       centring, and the fade in and out with the player
+     #nphalopulse  the beat, rewritten 60 times a second from the envelope
+     i             the slow drift, left to CSS since it never changes
 
    Gradients and transforms only, deliberately. A filter:blur() on a moving
    element makes the compositor recompute the blur every single frame, which
    on a phone costs more than the whole player is worth; a radial-gradient
-   fading to transparent is already soft, and moving it is free.
-
-   The drift is decorative and never audio-reactive: reading the signal would
-   mean Web Audio, whose AudioContext iOS suspends in the background, and that
-   would take lock-screen playback down with it (see the audio element above). */
+   fading to transparent is already soft, and moving it is free. */
 #nphalo{
-  position:absolute;left:50%;top:50%;width:min(146%,530px);aspect-ratio:1;
+  position:absolute;left:50%;top:50%;width:min(132%,500px);aspect-ratio:1;
   transform:translate(-50%,-50%);pointer-events:none;
   opacity:0;transition:opacity .7s ease;
 }
-#np.up #nphalo{opacity:.9}
+#np.up #nphalo{opacity:1}
 /* Paused, the light settles rather than going out: dimmer, and held still.
    Closed, it stops altogether — an animation nobody can see still keeps the
    compositor awake, and this is a player that runs for hours in a pocket. */
-#np:not(.playing) #nphalo{opacity:.42}
+#np:not(.playing) #nphalo{opacity:.4}
 #np:not(.playing) #nphalo i,
 #np:not(.up) #nphalo i{animation-play-state:paused}
+
+/* --pulse and --shimmer are 0…1, written by the rAF loop. The transition is
+   the release: the loop drops the value the instant the kick lands and the
+   light falls back on its own, which is what makes it read as a beat rather
+   than as a wobble. */
+#nphalopulse{
+  position:absolute;inset:0;
+  transform:scale(calc(1 + var(--pulse,0) * .2));
+  opacity:calc(.58 + var(--pulse,0) * .42);
+  transition:transform .09s ease-out,opacity .09s ease-out;
+  will-change:transform,opacity;
+}
 #nphalo i{
   position:absolute;inset:0;display:block;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 68%);
+  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 64%);
   mix-blend-mode:screen;will-change:transform;
 }
-/* Three periods that share no common multiple, so the pattern never visibly
+/* Three periods that share no common multiple, so the drift never visibly
    repeats over the length of a track. */
 #nphalo i:nth-child(1){animation:halo1 17s ease-in-out infinite}
 #nphalo i:nth-child(2){animation:halo2 21s ease-in-out infinite}
-#nphalo i:nth-child(3){animation:halo3 26s ease-in-out infinite}
+/* The third pool belongs to the treble: it is the one that flickers with a
+   hi-hat while the other two swell with the kick. */
+#nphalo i:nth-child(3){animation:halo3 26s ease-in-out infinite;
+  opacity:calc(.25 + var(--shimmer,0) * .75);transition:opacity .07s linear}
+/* The panel in front of the light: RGB subpixel columns and the dark gap
+   between rows, the way a screen looks with your eye against it. It sits on
+   the container and not on the pulsing layer on purpose — a panel's pixels
+   stay put while what they display moves behind them.
+
+   The mask is what makes it a light and not a rectangle of wallpaper. Without
+   it the grid covers its whole square edge to edge, and since the glow inside
+   is round, the corners betray a band of pattern sitting over nothing. Masked
+   on the same falloff as the pools themselves, the texture only exists where
+   there is light to cut up, and dissolves exactly where the light does —
+   including as the pool shrinks between beats, which is what --pulse does to
+   its opacity. */
+#nphalo::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    repeating-linear-gradient(0deg,rgba(0,0,0,.72) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(90deg,rgba(255,45,45,.32) 0 1px,rgba(40,255,90,.32) 1px 2px,rgba(60,110,255,.32) 2px 3px);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 38%,transparent 62%);
+  mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 38%,transparent 62%);
+  opacity:calc(.35 + var(--pulse,0) * .65);
+  transition:opacity .09s ease-out;
+  mix-blend-mode:multiply;
+}
 @keyframes halo1{0%,100%{transform:translate(-9%,-7%) scale(1)}   50%{transform:translate(8%,6%)   scale(1.17)}}
 @keyframes halo2{0%,100%{transform:translate(10%,5%)  scale(1.12)}50%{transform:translate(-8%,-9%) scale(.9)}}
 @keyframes halo3{0%,100%{transform:translate(1%,11%)  scale(.94)} 50%{transform:translate(-5%,-7%) scale(1.22)}}
-@media (prefers-reduced-motion:reduce){#nphalo i{animation:none!important}}
+@media (prefers-reduced-motion:reduce){
+  #nphalo i{animation:none!important}
+  #nphalopulse{transform:none!important}
+}
 
 /* position:relative so the halo can be centred on the artwork rather than on
    the screen: the glow belongs to the cover, and follows it up and down as the
@@ -299,6 +349,15 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .dlbtn.on{background:var(--acc);color:var(--on-acc)}
 #npFav.on{background:var(--acc);color:var(--on-acc)}
 .dlbtn.wait{opacity:.5}
+/* Delete, next to the heart. Grey until it is asked for: the two live one
+   thumb-width apart, and a red button beside a favourite would be read as a
+   pair of equals when only one of them is undoable.
+
+   Armed by the first tap, it turns red and grows for the two seconds it stays
+   live, so the second tap is aimed at something that has visibly changed. */
+#npDel{color:rgba(255,255,255,.55)}
+#npDel.armed{background:var(--red);color:#fff;transform:scale(1.12)}
+.dlbtn{transition:background .15s,color .15s,transform .15s}
 
 .scrub{flex:none;margin-top:20px;padding:9px 0;cursor:pointer}
 .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.16);position:relative}
@@ -443,12 +502,17 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
     </div>
   </div>
   <div class="npart">
-    <div id="nphalo" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div id="nphalo" aria-hidden="true"><div id="nphalopulse"><i></i><i></i><i></i></div></div>
     <div class="box" id="npArt"></div>
   </div>
   <div class="npmeta">
     <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
-    <button class="dlbtn" id="npFav" aria-label="Favourite"></button>
+    <div class="npbtns">
+      <button class="dlbtn" id="npFav" aria-label="Favourite"></button>
+      <button class="dlbtn" id="npDel" aria-label="Delete permanently">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>
+      </button>
+    </div>
   </div>
   <div class="npstate" id="npState"></div>
   <div class="scrub" id="scrub">
@@ -1318,6 +1382,164 @@ function extractPalette(img) {
   return cols;
 }
 
+/* ═══ the beat ═════════════════════════════════════════════
+   What the halo dances to. Two envelopes per track — one for the bass, one
+   for the treble — sampled 60 times a second and read back during playback
+   from audio.currentTime, so the light is frame-accurate with the sound by
+   construction rather than by luck.
+
+   Why precomputed and not an AnalyserNode reading the live output: hanging a
+   Web Audio graph off the <audio> element means calling
+   createMediaElementSource(), which reroutes that element's output through an
+   AudioContext for good — there is no way back. iOS suspends an AudioContext
+   when the app leaves the screen, and the audio would go with it, which would
+   trade lock-screen playback for a light show. Decoding the file separately
+   touches nothing: the element keeps its own straight path to the speaker,
+   and a suspended context here costs a still halo and not silence.
+
+   The file is already on the device in the common case (everything is
+   downloaded on its own), and a streamed one comes back out of the HTTP cache,
+   so this is a decode and not a second download. */
+const ENV_FPS = 60;
+/* A ceiling on what gets decoded. decodeAudioData hands back the whole track
+   as floats, and an hour-long set at this rate is a quarter of a gigabyte —
+   the kind of allocation iOS answers by killing the tab. Long sets keep the
+   slow drift, which is what they suit anyway. */
+const ENV_MAX_SEC = 900;
+const ENV_RATE = 12000;   // Nyquist at 6 kHz: everything a hi-hat needs to be felt
+const envCache = new Map();
+const envBusy = new Set();
+
+async function decodeEnvelope(id) {
+  const c = await caches.open(MEDIA_CACHE);
+  const res = (await c.match(mediaURL(id))) || (await fetch(mediaURL(id), { credentials: "same-origin" }));
+  if (!res || !res.ok) throw new Error("no audio");
+  const bytes = await res.arrayBuffer();
+
+  // An OfflineAudioContext is a decoder here and nothing else: it is never
+  // started, never connected, and produces no sound. decodeAudioData resamples
+  // to the context's rate, which is what keeps the buffer small.
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const ctx = new OAC(1, 1, ENV_RATE);
+  const buf = await ctx.decodeAudioData(bytes);
+
+  const ch = buf.getChannelData(0);   // one channel is plenty for an envelope
+  const rate = buf.sampleRate;
+  const per = rate / ENV_FPS;
+  const n = Math.max(1, Math.ceil(buf.duration * ENV_FPS));
+  const bass = new Float32Array(n);
+  const treble = new Float32Array(n);
+
+  // Two one-pole filters instead of an FFT. An FFT per frame is thousands of
+  // transforms for one track; this is a single pass over the samples, and the
+  // halo only needs "how much low" and "how much high", not a spectrum.
+  const aLow = 1 - Math.exp((-2 * Math.PI * 140) / rate);    // kick and bassline
+  const aMid = 1 - Math.exp((-2 * Math.PI * 1800) / rate);   // its complement is the top end
+  let lo = 0, mid = 0, sumLo = 0, sumHi = 0, cnt = 0, f = 0;
+
+  for (let i = 0; i < ch.length && f < n; i++) {
+    const x = ch[i];
+    lo += aLow * (x - lo);
+    mid += aMid * (x - mid);
+    const hi = x - mid;
+    sumLo += lo * lo;
+    sumHi += hi * hi;
+    if (++cnt >= per) {
+      bass[f] = Math.sqrt(sumLo / cnt);
+      treble[f] = Math.sqrt(sumHi / cnt);
+      f++;
+      sumLo = sumHi = cnt = 0;
+    }
+  }
+
+  // Scaled against the track's own loud passages rather than against full
+  // scale, so a quiet recording still lights the room. The 97th percentile
+  // rather than the maximum: one clipped frame should not flatten everything
+  // else against the ceiling.
+  const norm = (arr) => {
+    const sorted = Float32Array.from(arr).sort();
+    const ref = sorted[Math.floor(sorted.length * 0.97)] || 0;
+    const k = ref > 1e-5 ? 1 / ref : 0;
+    for (let i = 0; i < arr.length; i++) arr[i] = Math.min(1, arr[i] * k);
+  };
+  norm(bass);
+  norm(treble);
+
+  return { bass, treble };
+}
+
+/* Kicked off when the player opens on a track, and never awaited: until it
+   lands the halo simply drifts. */
+function ensureEnvelope(id) {
+  const t = byId(id);
+  if (!t || envCache.has(id) || envBusy.has(id)) return;
+  if (!(window.OfflineAudioContext || window.webkitOfflineAudioContext)) return;
+  if ((t.duration || 0) > ENV_MAX_SEC) return;
+
+  envBusy.add(id);
+  decodeEnvelope(id)
+    .then((env) => { envCache.set(id, env); })
+    // A codec this browser cannot decode, a file that is not there yet, a
+    // tainted read: none of it is worth a message. The drift covers it.
+    .catch(() => {})
+    .finally(() => envBusy.delete(id));
+}
+
+/* The loop. Fast attack and slow release, because the ear hears a kick as an
+   event and the eye has to see one too: matching the envelope exactly would
+   read as a wobble.
+
+   It runs only while the full-screen player is open and the music is moving,
+   so a phone in a pocket is doing nothing here at all. */
+let haloRAF = 0, pulse = 0, shimmer = 0;
+
+/* Written on the container, not on the layer that scales: the LED grid is a
+   ::after of the container, and a custom property set on a child would be
+   invisible to it. From here it inherits down to everything that reads it. */
+function writeHalo() {
+  const el = $("#nphalo");
+  el.style.setProperty("--pulse", pulse.toFixed(3));
+  el.style.setProperty("--shimmer", shimmer.toFixed(3));
+}
+
+function haloTick() {
+  haloRAF = requestAnimationFrame(haloTick);
+  const env = envCache.get(queue[qi]);
+  if (!env) {
+    // Nothing to follow: sink back to the resting value and let the drift be
+    // the whole effect.
+    pulse += (0.35 - pulse) * 0.06;
+    shimmer += (0.3 - shimmer) * 0.06;
+    writeHalo();
+    return;
+  }
+  const i = Math.min(env.bass.length - 1, Math.floor(audio.currentTime * ENV_FPS));
+  const b = env.bass[i] || 0;
+  const h = env.treble[i] || 0;
+  // Rise almost at once, fall in about four frames. Measured against a
+  // 120 BPM kick: a gentler release never gets back down between beats and
+  // the light just sits at the top, which reads as a wobble and not a pulse.
+  pulse += (b - pulse) * (b > pulse ? 0.8 : 0.22);
+  shimmer += (h - shimmer) * (h > shimmer ? 0.85 : 0.3);
+  writeHalo();
+}
+
+function syncHalo() {
+  const on = $("#np").classList.contains("up") && !audio.paused && queue[qi];
+  if (on) {
+    ensureEnvelope(queue[qi]);
+    if (!haloRAF) haloRAF = requestAnimationFrame(haloTick);
+  } else if (haloRAF) {
+    cancelAnimationFrame(haloRAF);
+    haloRAF = 0;
+    // Left where the music stopped it, the halo would hold one arbitrary
+    // frame of a beat. It settles to the middle instead.
+    pulse = 0.35;
+    shimmer = 0.3;
+    writeHalo();
+  }
+}
+
 function applyHalo(t, img) {
   if (!t) return;
   let cols = paletteCache.get(t.id);
@@ -1327,7 +1549,7 @@ function applyHalo(t, img) {
     // still loading would outlive the cover itself.
     if (img) paletteCache.set(t.id, cols);
   }
-  const blobs = $("#nphalo").children;
+  const blobs = document.querySelectorAll("#nphalo i");
   for (let i = 0; i < blobs.length; i++) {
     blobs[i].style.setProperty("--c", cols[i % cols.length]);
   }
@@ -1390,8 +1612,13 @@ function renderNow() {
   $("#npFav").setAttribute("aria-label", t.fav ? "Remove from favourites" : "Add to favourites");
 
   // Episodes: no stars, but a playback speed. Tracks: the reverse.
+  // Nor is an episode deleted from here: it belongs to a feed, and dropping
+  // it is a matter for the show.
   $("#mFav").style.visibility = isEp(t) ? "hidden" : "";
   $("#npFav").style.visibility = isEp(t) ? "hidden" : "";
+  $("#npDel").style.visibility = isEp(t) ? "hidden" : "";
+  // A skip must not carry an armed delete over to the next track.
+  if (npDelArmed && npDelArmed !== t.id) disarmNpDel();
   $("#npRate").classList.toggle("show", isEp(t));
   $("#npRate").textContent = fmtRate(podRate);
 
@@ -1604,6 +1831,7 @@ function stopPlayback() {
   queue = [];
   $("#mini").classList.remove("up");
   $("#np").classList.remove("up");
+  syncHalo();
 }
 
 // timeupdate fires four times a second; writing to localStorage that often
@@ -1630,8 +1858,8 @@ audio.addEventListener("ended", () => {
   clearPos(queue[qi]);
   next(true);
 });
-audio.addEventListener("play", () => { renderNow(); renderList(); syncSessionState(); });
-audio.addEventListener("pause", () => { savePos(true); renderNow(); renderList(); syncSessionState(); });
+audio.addEventListener("play", () => { renderNow(); renderList(); syncSessionState(); syncHalo(); });
+audio.addEventListener("pause", () => { savePos(true); renderNow(); renderList(); syncSessionState(); syncHalo(); });
 audio.addEventListener("error", () => {
   if (audio.src) toast("This track could not be played");
 });
@@ -1767,12 +1995,13 @@ addEventListener("beforeunload", (e) => {
 });
 
 /* ═══ events: player ═══════════════════════════════════════ */
-const openNP = () => { if (queue.length) $("#np").classList.add("up"); };
+const openNP = () => { if (queue.length) { $("#np").classList.add("up"); syncHalo(); } };
+const closeNP = () => { $("#np").classList.remove("up"); syncHalo(); };
 $("#mPlay").addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
 $("#mNext").addEventListener("click", (e) => { e.stopPropagation(); next(); });
 $("#mArt").addEventListener("click", openNP);
 $("#mOpen").addEventListener("click", openNP);
-$("#npClose").addEventListener("click", () => $("#np").classList.remove("up"));
+$("#npClose").addEventListener("click", closeNP);
 $("#npplay").addEventListener("click", () => toggle());
 $("#npNext").addEventListener("click", () => next());
 $("#npPrev").addEventListener("click", () => prev());
@@ -1807,6 +2036,35 @@ $("#npMenu").addEventListener("click", () => {
   const t = byId(queue[qi]);
   if (!t) return;
   isEp(t) ? openEpMenu(t.id) : openMenu(t.id);
+});
+
+/* Delete, without going through the menu. Same two-tap rule as the menu item,
+   with the toast carrying the question since a 32px circle has nowhere to put
+   it. The arming is dropped on any change of track, so the tap that skips a
+   song can never leave a live delete behind on the next one. */
+let npDelArmed = null;
+let npDelTimer = null;
+
+function disarmNpDel() {
+  clearTimeout(npDelTimer);
+  npDelArmed = null;
+  $("#npDel").classList.remove("armed");
+}
+
+$("#npDel").addEventListener("click", () => {
+  const t = byId(queue[qi]);
+  if (!t) return;
+  if (isEp(t)) { toast("Episodes are managed from the show"); return; }
+
+  if (npDelArmed !== t.id) {
+    npDelArmed = t.id;
+    $("#npDel").classList.add("armed");
+    toast("Tap again to delete this track");
+    npDelTimer = setTimeout(disarmNpDel, 3000);
+    return;
+  }
+  disarmNpDel();
+  deleteTrack(t.id);
 });
 
 /* Playback speed, cycled rather than picked from a menu: four values, and
@@ -1951,7 +2209,7 @@ $("#np").addEventListener("touchend", () => {
   npArtBox().style.transform = "";
   npArtBox().style.opacity = "";
 
-  if (axis === "y" && dy > 95) $("#np").classList.remove("up");
+  if (axis === "y" && dy > 95) closeNP();
   // Left goes forward, matching the direction the queue moves.
   else if (axis === "x" && dx < -70) next(false);
   else if (axis === "x" && dx > 70) prev();
@@ -2202,39 +2460,48 @@ $("#menuSheet").addEventListener("click", async (e) => {
     load();
     return;
   }
-  if (action === "del") {
-    // Offline, the DELETE never reaches D1 and the next successful load brings
-    // the track straight back. Removing it from the screen anyway would look
-    // like a delete that quietly undid itself, so it is refused instead.
-    if (!navigator.onLine) { toast("Deleting needs a connection"); return; }
-
-    const res = await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => null);
-    if (!res || !res.ok) { toast("The server refused the deletion"); return; }
-
-    if (queue[qi] === id) stopPlayback();
-    await dropOffline(id).catch(() => {});
-    await dropCachedArt(artURL(id));
-    clearPos(id);
-    tracks = tracks.filter((t) => t.id !== id);
-    // The library is cached on the device for the offline case, and that copy
-    // is what a reload reads first. Without this the row comes back on the
-    // next start with no connection, which is the opposite of permanent.
-    saveTracks(tracks);
-    // qi is an index, so removing anything ahead of it in the queue shifts it
-    // onto the wrong track: the bar would name the next one while the audio
-    // kept playing the current one, and "next" would skip a track. Follow the
-    // id across the filter instead of trusting the position.
-    const cur = queue[qi];
-    queue = queue.filter((x) => x !== id);
-    qi = cur ? queue.indexOf(cur) : -1;
-    // The server drops the membership rows; the local copy has to follow, or
-    // an open playlist keeps a row for a track that no longer exists.
-    for (const k of Object.keys(plItems)) plItems[k] = plItems[k].filter((x) => x !== id);
-    savePlaylists();
-    toast("Deleted");
-    renderList(); renderNow();
-  }
+  if (action === "del") deleteTrack(id);
 });
+
+/* Gone from D1, from R2, from this device's caches and from every playlist.
+   Two callers: the row menu, and the button in the player. Both ask twice
+   first — see the arming above and #npDel below. */
+async function deleteTrack(id) {
+  // Offline, the DELETE never reaches D1 and the next successful load brings
+  // the track straight back. Removing it from the screen anyway would look
+  // like a delete that quietly undid itself, so it is refused instead.
+  if (!navigator.onLine) { toast("Deleting needs a connection"); return false; }
+
+  const res = await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => null);
+  if (!res || !res.ok) { toast("The server refused the deletion"); return false; }
+
+  if (queue[qi] === id) stopPlayback();
+  await dropOffline(id).catch(() => {});
+  await dropCachedArt(artURL(id));
+  clearPos(id);
+  envCache.delete(id);
+  paletteCache.delete(id);
+  tracks = tracks.filter((t) => t.id !== id);
+  // The library is cached on the device for the offline case, and that copy
+  // is what a reload reads first. Without this the row comes back on the
+  // next start with no connection, which is the opposite of permanent.
+  saveTracks(tracks);
+  // qi is an index, so removing anything ahead of it in the queue shifts it
+  // onto the wrong track: the bar would name the next one while the audio
+  // kept playing the current one, and "next" would skip a track. Follow the
+  // id across the filter instead of trusting the position.
+  const cur = queue[qi];
+  queue = queue.filter((x) => x !== id);
+  qi = cur ? queue.indexOf(cur) : -1;
+  // The server drops the membership rows; the local copy has to follow, or
+  // an open playlist keeps a row for a track that no longer exists.
+  for (const k of Object.keys(plItems)) plItems[k] = plItems[k].filter((x) => x !== id);
+  savePlaylists();
+  toast("Deleted");
+  renderList();
+  renderNow();
+  return true;
+}
 
 /* ═══ playlists ════════════════════════════════════════════ */
 let plTrackId = null;   // the track the sheet is acting on
