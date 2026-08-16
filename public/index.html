@@ -232,8 +232,54 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .nphead{display:flex;align-items:center;justify-content:space-between;flex:none;height:38px;margin:0 -8px}
 .nphead .lbl{font-size:11px;font-weight:600;letter-spacing:.075em;text-transform:uppercase;color:rgba(255,255,255,.55)}
 .nphead .iconbtn{background:rgba(255,255,255,.1)}
+/* Speed and the overflow menu share the right slot. The speed button keeps its
+   space when hidden (visibility, not display), so the label stays put whether
+   a podcast or a track is playing. */
+.nptools{display:flex;align-items:center;gap:7px;flex:none}
 
-.npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px}
+/* ─── ambient halo ────────────────────────────────────────────
+   The wall behind the record, lit by the record. Three soft pools of colour
+   taken from the cover itself, drifting slowly behind the artwork.
+
+   Gradients and transforms only, deliberately. A filter:blur() on a moving
+   element makes the compositor recompute the blur every single frame, which
+   on a phone costs more than the whole player is worth; a radial-gradient
+   fading to transparent is already soft, and moving it is free.
+
+   The drift is decorative and never audio-reactive: reading the signal would
+   mean Web Audio, whose AudioContext iOS suspends in the background, and that
+   would take lock-screen playback down with it (see the audio element above). */
+#nphalo{
+  position:absolute;left:50%;top:50%;width:min(146%,530px);aspect-ratio:1;
+  transform:translate(-50%,-50%);pointer-events:none;
+  opacity:0;transition:opacity .7s ease;
+}
+#np.up #nphalo{opacity:.9}
+/* Paused, the light settles rather than going out: dimmer, and held still.
+   Closed, it stops altogether — an animation nobody can see still keeps the
+   compositor awake, and this is a player that runs for hours in a pocket. */
+#np:not(.playing) #nphalo{opacity:.42}
+#np:not(.playing) #nphalo i,
+#np:not(.up) #nphalo i{animation-play-state:paused}
+#nphalo i{
+  position:absolute;inset:0;display:block;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 68%);
+  mix-blend-mode:screen;will-change:transform;
+}
+/* Three periods that share no common multiple, so the pattern never visibly
+   repeats over the length of a track. */
+#nphalo i:nth-child(1){animation:halo1 17s ease-in-out infinite}
+#nphalo i:nth-child(2){animation:halo2 21s ease-in-out infinite}
+#nphalo i:nth-child(3){animation:halo3 26s ease-in-out infinite}
+@keyframes halo1{0%,100%{transform:translate(-9%,-7%) scale(1)}   50%{transform:translate(8%,6%)   scale(1.17)}}
+@keyframes halo2{0%,100%{transform:translate(10%,5%)  scale(1.12)}50%{transform:translate(-8%,-9%) scale(.9)}}
+@keyframes halo3{0%,100%{transform:translate(1%,11%)  scale(.94)} 50%{transform:translate(-5%,-7%) scale(1.22)}}
+@media (prefers-reduced-motion:reduce){#nphalo i{animation:none!important}}
+
+/* position:relative so the halo can be centred on the artwork rather than on
+   the screen: the glow belongs to the cover, and follows it up and down as the
+   player's height changes. */
+.npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px;position:relative}
 .npart .box{width:min(100%,340px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
 #np:not(.playing) .npart .box{transform:scale(.88)}
 /* position:relative is required: .fb is position:absolute and would paint ON
@@ -302,6 +348,11 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 .mi:active{opacity:.5}
 .mi.del{color:var(--red)}
 .mi.del svg{color:var(--red)}
+/* Armed: the item has been tapped once and the next tap deletes. It has to
+   look like a different thing from the one just tapped, or the second tap is
+   made without noticing the first did something. */
+.mi.del.armed{background:color-mix(in srgb,var(--red) 17%,transparent);font-weight:600;
+  margin:0 -16px;padding:0 16px;width:calc(100% + 32px)}
 .mi[hidden]{display:none}
 
 #toast{position:fixed;left:50%;bottom:calc(var(--mini) + var(--minipad) + 26px);transform:translate(-50%,14px);z-index:80;background:var(--toast-bg);color:var(--toast-fg);padding:9px 15px;border-radius:19px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;box-shadow:0 8px 26px var(--shadow);max-width:82vw;text-align:center}
@@ -384,9 +435,17 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <div class="lbl" id="npSrc">Now playing</div>
-    <button class="iconbtn" id="npRate" aria-label="Playback speed">1×</button>
+    <div class="nptools">
+      <button class="iconbtn" id="npRate" aria-label="Playback speed">1×</button>
+      <button class="iconbtn" id="npMenu" aria-label="Options">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.5" r="1.7"/></svg>
+      </button>
+    </div>
   </div>
-  <div class="npart"><div class="box" id="npArt"></div></div>
+  <div class="npart">
+    <div id="nphalo" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="box" id="npArt"></div>
+  </div>
   <div class="npmeta">
     <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
     <button class="dlbtn" id="npFav" aria-label="Favourite"></button>
@@ -437,8 +496,13 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   <button class="mi" data-a="retry" id="mnRetry" hidden>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 20v-5h5"/></svg>Retry
   </button>
-  <button class="mi del" data-a="del">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Delete
+  <button class="mi" data-a="rm" id="mnRm" hidden>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M15.5 19.5h5"/></svg>
+    <span id="mnRmTxt">Remove from the playlist</span>
+  </button>
+  <button class="mi del" data-a="del" id="mnDel">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12.1A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>
+    <span id="mnDelTxt">Delete permanently</span>
   </button>
 </div>
 
@@ -680,13 +744,27 @@ function applyPlaylists(data) {
   if (plOnly && !plById(plOnly)) setPlaylist("");
 }
 
+/* The cache is written back from the state rather than only from the server's
+   answer, so a change made on this device survives a reload that has no
+   connection to confirm it. Same payload shape as /api/playlists, which is
+   what applyPlaylists() reads on the way back in. */
+function savePlaylists() {
+  try {
+    const items = [];
+    for (const p of playlists) {
+      for (const track_id of plItems[p.id] || []) items.push({ playlist_id: p.id, track_id });
+    }
+    localStorage.setItem(PL_KEY, JSON.stringify({ playlists, items }));
+  } catch {}
+}
+
 async function loadPlaylists() {
   try {
     const res = await api("/api/playlists");
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     applyPlaylists(data);
-    try { localStorage.setItem(PL_KEY, JSON.stringify(data)); } catch {}
+    savePlaylists();
   } catch (e) {
     if (String(e.message) === "401") return;
     if (!playlists.length) {
@@ -775,6 +853,21 @@ async function dropOffline(id) {
   const c = await caches.open(MEDIA_CACHE);
   await c.delete(mediaURL(id));
   offline.delete(id);
+}
+
+/* The artwork does not go through dropOffline(): it is the service worker that
+   caches it, from its own bucket, cache-first and never revalidated. So a
+   deleted track keeps painting its cover from the device long after the file
+   left R2, and those bytes are never reclaimed.
+   Every cache is swept rather than the one by name: the bucket is sw.js's
+   business, and one more constant to keep in sync across two files is a worse
+   trade than a loop over three keys. */
+async function dropCachedArt(url) {
+  try {
+    for (const k of await caches.keys()) {
+      await (await caches.open(k)).delete(url);
+    }
+  } catch {}
 }
 
 /* Put everything on the device, one at a time.
@@ -1147,6 +1240,99 @@ const HEART_OUTLINE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="non
 
 let npArtId = null;
 
+/* ═══ ambient halo ═════════════════════════════════════════
+   The colours behind the artwork come from the artwork. Read once per track
+   off a 24×24 downscale of the cover — small enough that the whole thing is a
+   few hundred pixels of work, large enough to survive a logo in one corner.
+
+   Both the canvas and the image are same-origin (/art/…), so getImageData is
+   allowed; it is still guarded, because a cover served from the offline cache
+   after a redirect would taint the canvas and throw. */
+const paletteCache = new Map();
+const HALO_BINS = 12;
+
+/* Nothing to read: no cover yet, or the read failed. The library already
+   derives a colour from the title for the placeholder tile, so the glow keeps
+   the same identity as the letter the user is looking at. */
+function fallbackPalette(t) {
+  const h = hue((t.title || "") + (t.artist || ""));
+  return [h, (h + 38) % 360, (h + 322) % 360].map((x) => `hsl(${x} 62% 46%)`);
+}
+
+function extractPalette(img) {
+  const N = 24;
+  const c = document.createElement("canvas");
+  c.width = c.height = N;
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, N, N);
+
+  let data;
+  try { data = ctx.getImageData(0, 0, N, N).data; } catch { return null; }
+
+  // Hue histogram, each pixel weighted by its own saturation: a mostly grey
+  // sleeve with one red stripe should glow red, not grey.
+  const bins = Array.from({ length: HALO_BINS }, () => ({ w: 0, x: 0, y: 0, s: 0 }));
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    const l = (mx + mn) / 2;
+    // Near-black and near-white carry no usable hue, and a cover is mostly one
+    // or the other at the edges.
+    if (d < 0.06 || l < 0.08 || l > 0.94) continue;
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h;
+    if (mx === r) h = ((g - b) / d + 6) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+
+    const bin = bins[Math.floor(h / (360 / HALO_BINS)) % HALO_BINS];
+    const w = s * s; // squared, so a vivid pixel outvotes several washed-out ones
+    bin.w += w;
+    bin.s += s * w;
+    // Hues are angles: averaged as numbers, 350° and 10° give 180°, which is
+    // the one colour neither pixel had. Summed as vectors they give 0°.
+    bin.x += Math.cos((h * Math.PI) / 180) * w;
+    bin.y += Math.sin((h * Math.PI) / 180) * w;
+  }
+
+  const top = bins.filter((b) => b.w > 0).sort((a, b) => b.w - a.w).slice(0, 3);
+  if (!top.length) return null;
+
+  const cols = top.map((b) => {
+    const h = (Math.atan2(b.y, b.x) * 180) / Math.PI;
+    // Floors, not the measured values: the glow has to read on a near-black
+    // screen, and a muted cover would otherwise light nothing at all.
+    const s = Math.min(88, Math.max(52, (b.s / b.w) * 115));
+    return `hsl(${Math.round((h + 360) % 360)} ${Math.round(s)}% 50%)`;
+  });
+  // A cover with a single colour would light three identical pools stacked
+  // into one flat disc, so a neighbouring hue is invented to give it depth.
+  // Two is already enough: the third blob reuses the first (the caller cycles
+  // through the list), which reads better than a near-duplicate of the second.
+  if (cols.length === 1) {
+    const m = cols[0].match(/hsl\((\d+)/);
+    cols.push(`hsl(${((m ? Number(m[1]) : 30) + 34) % 360} 60% 44%)`);
+  }
+  return cols;
+}
+
+function applyHalo(t, img) {
+  if (!t) return;
+  let cols = paletteCache.get(t.id);
+  if (!cols) {
+    cols = (img && extractPalette(img)) || fallbackPalette(t);
+    // Only a real reading is worth keeping: a fallback used while the cover was
+    // still loading would outlive the cover itself.
+    if (img) paletteCache.set(t.id, cols);
+  }
+  const blobs = $("#nphalo").children;
+  for (let i = 0; i < blobs.length; i++) {
+    blobs[i].style.setProperty("--c", cols[i % cols.length]);
+  }
+}
+
 function setNpArt(t) {
   const box = $("#npArt");
   if (!t) { npArtId = null; box.innerHTML = ""; return; }
@@ -1165,6 +1351,9 @@ function setNpArt(t) {
   fb.style.background =
     `linear-gradient(145deg,hsl(${h} 34% 30%),hsl(${(h + 42) % 360} 30% 15%))`;
 
+  // The letter's own colours light the room until the cover arrives.
+  applyHalo(t, null);
+
   if (t.status !== "ready") { img.style.opacity = "0"; return; }
 
   const pre = new Image();
@@ -1172,6 +1361,9 @@ function setNpArt(t) {
     if (npArtId !== t.id) return;
     img.src = pre.src;
     img.style.opacity = "1";
+    // Read from the image already decoded for the player rather than loading
+    // the cover a second time.
+    applyHalo(t, pre);
   };
   pre.onerror = () => { if (npArtId === t.id) img.style.opacity = "0"; };
   pre.src = artURL(t.id);
@@ -1395,6 +1587,25 @@ function startAll(rnd) {
   if (rnd) toast("Shuffling");
 }
 
+/* Stop, and forget what was playing. For the cases where the current track
+   stops existing rather than simply ending: deleted, unsubscribed, evicted
+   from the cloud.
+
+   The full-screen player is dismissed too, which matters now that those
+   actions can be taken from inside it — it would otherwise stay open on the
+   artwork of something that no longer exists. */
+function stopPlayback() {
+  audio.pause();
+  audio.removeAttribute("src");
+  // loadInto() revokes the previous URL on the way in, and there is no way in
+  // from here: without this the blob would be held until the tab closes.
+  if (objectURL) { URL.revokeObjectURL(objectURL); objectURL = null; }
+  qi = -1;
+  queue = [];
+  $("#mini").classList.remove("up");
+  $("#np").classList.remove("up");
+}
+
 // timeupdate fires four times a second; writing to localStorage that often
 // would be pointless. Every five seconds of playback is enough to survive the
 // app being killed in the background, which is how a session usually ends.
@@ -1587,6 +1798,15 @@ $("#mFav").addEventListener("click", (e) => {
 $("#npFav").addEventListener("click", () => {
   const t = byId(queue[qi]);
   if (t) toggleFav(t.id);
+});
+
+/* The same overflow menu the list rows have, for whatever is playing. The
+   sheets sit above the player (z-index), so it opens over it and the player is
+   still there underneath when the sheet is dismissed. */
+$("#npMenu").addEventListener("click", () => {
+  const t = byId(queue[qi]);
+  if (!t) return;
+  isEp(t) ? openEpMenu(t.id) : openMenu(t.id);
 });
 
 /* Playback speed, cycled rather than picked from a menu: four values, and
@@ -1820,6 +2040,9 @@ const openSheet = (s) => { $("#scrim").classList.add("up"); $(s).classList.add("
 function closeSheets() {
   $("#scrim").classList.remove("up");
   document.querySelectorAll(".sheet").forEach((s) => s.classList.remove("up"));
+  // Dismissing the sheet is an answer of "no": the delete must not still be
+  // armed the next time it opens.
+  disarmDelete();
 }
 $("#scrim").addEventListener("click", closeSheets);
 
@@ -1889,6 +2112,25 @@ document.querySelectorAll(".sheet").forEach(dismissable);
 let adding = false;
 /* -- context menu -- */
 let menuId = null;
+
+/* Deleting is the only thing in this app that cannot be undone: the audio and
+   the artwork leave R2, the row leaves D1, and no other device can put them
+   back. So it asks twice — the item arms on the first tap and does the work on
+   the second. A confirmation dialog would do the same job, but this menu is
+   reached with a thumb, often from the player, and a second tap in the place
+   the thumb already is beats a modal it has to travel to.
+
+   The arming expires: a sheet left open with a live delete on it is a trap. */
+let delArmed = null;
+let delTimer = null;
+
+function disarmDelete() {
+  clearTimeout(delTimer);
+  delArmed = null;
+  $("#mnDel").classList.remove("armed");
+  $("#mnDelTxt").textContent = "Delete permanently";
+}
+
 function openMenu(id) {
   const t = byId(id);
   if (!t) return;
@@ -1903,6 +2145,15 @@ function openMenu(id) {
   $("#mnPlay").hidden = !ready;
   $("#mnDl").hidden = !ready;
   $("#mnRetry").hidden = t.status !== "error";
+
+  // Taking a track out of the open playlist is its own action, and the one
+  // wanted far more often than deletion. It only exists while a playlist is
+  // open: everywhere else there is no list to be removed from.
+  const inPl = Boolean(plOnly && plHas(plOnly, id));
+  $("#mnRm").hidden = !inPl;
+  if (inPl) $("#mnRmTxt").textContent = `Remove from ${plById(plOnly)?.name || "the playlist"}`;
+
+  disarmDelete();
   openSheet("#menuSheet");
 }
 
@@ -1922,12 +2173,25 @@ $("#menuSheet").addEventListener("click", async (e) => {
   if (!b || !menuId) return;
   const id = menuId;
   const action = b.dataset.a;
+
+  // First tap on Delete arms it and leaves the sheet open; everything else
+  // both disarms it and closes.
+  if (action === "del" && delArmed !== id) {
+    delArmed = id;
+    $("#mnDel").classList.add("armed");
+    $("#mnDelTxt").textContent = "Tap again to delete";
+    clearTimeout(delTimer);
+    delTimer = setTimeout(disarmDelete, 4000);
+    return;
+  }
+  disarmDelete();
   closeSheets();
 
   if (action === "play") { play(id); return; }
   if (action === "fav") { toggleFav(id); return; }
   if (action === "dl") { toggleOffline(id); return; }
   if (action === "pl") { openPlSheet(id); return; }
+  if (action === "rm") { setMembership(plOnly, id, false); return; }
   if (action === "retry") {
     await api("/api/tracks", {
       method: "POST",
@@ -1939,11 +2203,23 @@ $("#menuSheet").addEventListener("click", async (e) => {
     return;
   }
   if (action === "del") {
-    if (queue[qi] === id) { audio.pause(); audio.removeAttribute("src"); qi = -1; queue = []; $("#mini").classList.remove("up"); }
+    // Offline, the DELETE never reaches D1 and the next successful load brings
+    // the track straight back. Removing it from the screen anyway would look
+    // like a delete that quietly undid itself, so it is refused instead.
+    if (!navigator.onLine) { toast("Deleting needs a connection"); return; }
+
+    const res = await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!res || !res.ok) { toast("The server refused the deletion"); return; }
+
+    if (queue[qi] === id) stopPlayback();
     await dropOffline(id).catch(() => {});
+    await dropCachedArt(artURL(id));
     clearPos(id);
-    await api(`/api/tracks/${id}`, { method: "DELETE" }).catch(() => {});
     tracks = tracks.filter((t) => t.id !== id);
+    // The library is cached on the device for the offline case, and that copy
+    // is what a reload reads first. Without this the row comes back on the
+    // next start with no connection, which is the opposite of permanent.
+    saveTracks(tracks);
     // qi is an index, so removing anything ahead of it in the queue shifts it
     // onto the wrong track: the bar would name the next one while the audio
     // kept playing the current one, and "next" would skip a track. Follow the
@@ -1954,6 +2230,7 @@ $("#menuSheet").addEventListener("click", async (e) => {
     // The server drops the membership rows; the local copy has to follow, or
     // an open playlist keeps a row for a track that no longer exists.
     for (const k of Object.keys(plItems)) plItems[k] = plItems[k].filter((x) => x !== id);
+    savePlaylists();
     toast("Deleted");
     renderList(); renderNow();
   }
@@ -1990,40 +2267,47 @@ function renderPlPick() {
     : `<div class="sh-s" style="padding:6px 0 2px">No playlists yet. Name one below.</div>`;
 }
 
-$("#plPick").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-plpick]");
-  if (!b || !plTrackId) return;
-  const plId = b.dataset.plpick;
-  const id = plTrackId;
-  const name = plById(plId)?.name || "playlist";
-  const had = plHas(plId, id);
+/* Put a track in a list, or take it out. Two callers: ticking a row in the
+   playlist sheet, and "Remove from …" in a row's own menu — removing a track
+   from the list you are looking at should not mean opening a picker to untick
+   the list you are already in.
 
-  // Local first, same as starring: the sheet answers the tap and the server
-  // catches up. A failure puts the row back rather than lying about it.
-  plItems[plId] = had
-    ? (plItems[plId] || []).filter((x) => x !== id)
-    : [...(plItems[plId] || []), id];
+   Local first, same as starring: the tap is answered immediately and the
+   server catches up. A failure puts the membership back rather than lying
+   about it. */
+async function setMembership(plId, id, add) {
+  if (!plId || !id) return;
+  const name = plById(plId)?.name || "playlist";
+  const cur = plItems[plId] || [];
+
+  plItems[plId] = add ? [...cur, id] : cur.filter((x) => x !== id);
+  savePlaylists();
   renderPlPick();
   renderList();
-  toast(had ? `Removed from ${name}` : `Added to ${name}`);
+  toast(add ? `Added to ${name}` : `Removed from ${name}`);
 
   try {
-    const res = had
-      ? await api(`/api/playlists/${plId}/tracks/${id}`, { method: "DELETE" })
-      : await api(`/api/playlists/${plId}/tracks`, {
+    const res = add
+      ? await api(`/api/playlists/${plId}/tracks`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${id}` }),
-        });
+        })
+      : await api(`/api/playlists/${plId}/tracks/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error(res.status);
   } catch {
-    plItems[plId] = had
-      ? [...(plItems[plId] || []), id]
-      : (plItems[plId] || []).filter((x) => x !== id);
+    plItems[plId] = cur;
+    savePlaylists();
     renderPlPick();
     renderList();
     toast("That did not reach the server");
   }
+}
+
+$("#plPick").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-plpick]");
+  if (!b || !plTrackId) return;
+  setMembership(b.dataset.plpick, plTrackId, !plHas(b.dataset.plpick, plTrackId));
 });
 
 $("#plNew").addEventListener("click", async () => {
@@ -2286,15 +2570,13 @@ $("#podMenu").addEventListener("click", async (e) => {
 
   if (b.dataset.pa === "unsub") {
     const cur = byId(queue[qi]);
-    if (cur && cur.pod === id) {
-      audio.pause(); audio.removeAttribute("src");
-      qi = -1; queue = [];
-      $("#mini").classList.remove("up");
-    }
+    if (cur && cur.pod === id) stopPlayback();
     for (const ep of eps.filter((x) => x.pod === id)) {
       dropOffline(ep.id).catch(() => {});
       clearPos(ep.id);
     }
+    // One cover for the whole show, so it goes once the show does.
+    await dropCachedArt(`/art/pod/${id}`);
     await api(`/api/podcasts/${id}`, { method: "DELETE" }).catch(() => {});
     pods = pods.filter((p) => p.id !== id);
     eps = eps.filter((x) => x.pod !== id);
@@ -2339,11 +2621,7 @@ $("#epMenu").addEventListener("click", async (e) => {
   if (a === "dl") toggleOffline(id);
 
   if (a === "cloud") {
-    if (queue[qi] === id) {
-      audio.pause(); audio.removeAttribute("src");
-      qi = -1; queue = [];
-      $("#mini").classList.remove("up");
-    }
+    if (queue[qi] === id) stopPlayback();
     dropOffline(id).catch(() => {});
     await api(`/api/episodes/${id}`, { method: "DELETE" }).catch(() => {});
     ep.status = "new"; ep.size = 0;
