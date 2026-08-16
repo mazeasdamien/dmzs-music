@@ -226,8 +226,14 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   will-change:transform;pointer-events:none;
 }
 #np.up{transform:translateY(0);pointer-events:auto}
-#npbg{position:absolute;inset:0;z-index:-1;background-size:cover;background-position:center;filter:blur(58px) saturate(1.5) brightness(.42);transform:scale(1.5);opacity:.85}
-#npbg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,9,11,.35),rgba(9,9,11,.9))}
+/* Was a second, blurred copy of the cover. The ambient layer below is now the
+   same picture doing the same job better, and two washes of one photograph
+   only ever added up to mud. What is left is the veil that keeps the title and
+   the scrubber legible over whatever the light is doing — which is why it sits
+   AFTER the light in the document: both are z-index -1, so the later one wins,
+   and a veil painted underneath would veil nothing. */
+#npbg{position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(9,9,11,.28) 0%,transparent 22%,transparent 58%,rgba(9,9,11,.72) 82%,rgba(9,9,11,.93) 100%)}
 
 /* Three columns rather than space-between, and the outer two share a width.
    Under space-between the label only lands in the middle while both sides
@@ -242,100 +248,74 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    between a podcast and a track. */
 .nptools{display:flex;align-items:center;gap:7px;justify-self:end}
 
-/* ─── ambient halo ────────────────────────────────────────────
-   The wall behind the record, lit by the record, and beating with it. Pools of
-   colour taken from the cover itself; the bass drives their size and
-   brightness, the treble a quicker shimmer on top.
+/* ─── ambient light ───────────────────────────────────────────
+   The room lit by the record, the way YouTube lights a page around a video.
 
-   Three nested layers, because each one moves for a different reason and
-   fighting over a single transform would mean recomputing all of it every
-   frame:
-     #nphalo       centring, and the fade in and out with the player
-     #nphalopulse  the beat, rewritten 60 times a second from the envelope
-     i             the slow drift, left to CSS since it never changes
+   The light IS the artwork — a twenty-pixel copy of the cover blown up across
+   the whole screen — and not a colour guessed from it. That is the whole
+   design: a guess can be wrong, and it was. Deriving a hue and then forcing it
+   to 52% saturation so that dull covers still glowed turned a photo of a beige
+   field under a pale sky into a violet disc, because the largest thing in the
+   frame was a faintly lavender sky. Pixels cannot disagree with the picture
+   they came from.
 
-   Gradients and transforms only, deliberately. A filter:blur() on a moving
-   element makes the compositor recompute the blur every single frame, which
-   on a phone costs more than the whole player is worth; a radial-gradient
-   fading to transparent is already soft, and moving it is free. */
-/* The size is not a taste decision, it is arithmetic. The pools are centred on
-   the cover and the cover is opaque, so a lit radius shorter than half the
-   artwork is a light nobody will ever see. At 132% with the gradient dying at
-   64%, the lit radius came out 25px INSIDE the cover's own edge on a phone,
-   and all that ever escaped was a corner during a beat. It now reaches some
-   70px past the artwork at rest and past 100px on a kick. */
+   Blown up, twenty pixels are a soft colour field with no filter involved,
+   which is what makes it cheap enough to move sixty times a second: a
+   filter:blur() would have the compositor redraw the blur on every frame.
+
+   Full bleed and masked, so there is no shape to notice. The mask reaches zero
+   well inside the element, so the light dies out into the page instead of
+   ending at an edge. */
 #nphalo{
-  position:absolute;left:50%;top:50%;width:min(158%,540px);aspect-ratio:1;
-  transform:translate(-50%,-50%);pointer-events:none;
+  position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   opacity:0;transition:opacity .7s ease;
+  -webkit-mask-image:radial-gradient(ellipse 70% 34% at 50% 52%,#000 0%,rgba(0,0,0,.6) 45%,transparent 84%);
+  mask-image:radial-gradient(ellipse 70% 34% at 50% 52%,#000 0%,rgba(0,0,0,.6) 45%,transparent 84%);
 }
 #np.up #nphalo{opacity:1}
-/* Paused, the light settles rather than going out: dimmer, and held still.
-   Closed, it stops altogether — an animation nobody can see still keeps the
-   compositor awake, and this is a player that runs for hours in a pocket. */
-#np:not(.playing) #nphalo{opacity:.4}
-#np:not(.playing) #nphalo i,
-#np:not(.up) #nphalo i{animation-play-state:paused}
+/* Paused, the light settles rather than going out. */
+#np:not(.playing) #nphalo{opacity:.55}
 
-/* --pulse and --shimmer are 0…1, written by the rAF loop. The transition is
-   the release: the loop drops the value the instant the kick lands and the
-   light falls back on its own, which is what makes it read as a beat rather
-   than as a wobble. */
+/* --pulse is 0…1, rewritten by the rAF loop. Scale and brightness together:
+   the room swells and brightens on the kick, then falls back on the
+   transition, which is the release the eye actually reads as a beat.
+
+   Wider than the screen so the growth never uncovers an edge. */
 #nphalopulse{
-  position:absolute;inset:0;
-  transform:scale(calc(1 + var(--pulse,0) * .2));
-  opacity:calc(.58 + var(--pulse,0) * .42);
-  transition:transform .09s ease-out,opacity .09s ease-out;
+  position:absolute;inset:-14%;
+  background-size:cover;background-position:center;
+  transform:scale(calc(1 + var(--pulse,0) * .09));
+  opacity:calc(.42 + var(--pulse,0) * .38);
+  transition:transform .1s ease-out,opacity .1s ease-out;
   will-change:transform,opacity;
 }
-#nphalo i{
-  position:absolute;inset:0;display:block;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,var(--c,#f0a04b) 0%,transparent 78%);
-  mix-blend-mode:screen;will-change:transform;
-}
-/* Three periods that share no common multiple, so the drift never visibly
-   repeats over the length of a track. */
-#nphalo i:nth-child(1){animation:halo1 17s ease-in-out infinite}
-#nphalo i:nth-child(2){animation:halo2 21s ease-in-out infinite}
-/* The third pool belongs to the treble: it is the one that flickers with a
-   hi-hat while the other two swell with the kick. */
-#nphalo i:nth-child(3){animation:halo3 26s ease-in-out infinite;
-  opacity:calc(.25 + var(--shimmer,0) * .75);transition:opacity .07s linear}
 /* The panel in front of the light: RGB subpixel columns and the dark gap
-   between rows, the way a screen looks with your eye against it. It sits on
-   the container and not on the pulsing layer on purpose — a panel's pixels
-   stay put while what they display moves behind them.
+   between rows, the way a screen looks with your eye against it. Fixed, while
+   the light moves behind it — a panel's pixels do not travel with what they
+   display.
 
-   The mask is what makes it a light and not a rectangle of wallpaper. Without
-   it the grid covers its whole square edge to edge, and since the glow inside
-   is round, the corners betray a band of pattern sitting over nothing. Masked
-   on the same falloff as the pools themselves, the texture only exists where
-   there is light to cut up, and dissolves exactly where the light does —
-   including as the pool shrinks between beats, which is what --pulse does to
-   its opacity. */
+   It needs no mask of its own: it is inside #nphalo, so the light's mask
+   fades the grid out on exactly the same curve. Both dissolve into the page
+   together, which is the whole point — a texture that stopped at a hard line
+   would read as a sticker.
+
+   multiply keeps it honest: darkening the near-black page does nothing, so
+   the grid only shows where there is light to cut up, and follows the beat
+   through its own opacity. */
 #nphalo::after{
   content:"";position:absolute;inset:0;pointer-events:none;
   background-image:
-    repeating-linear-gradient(0deg,rgba(0,0,0,.72) 0 1px,transparent 1px 4px),
-    repeating-linear-gradient(90deg,rgba(255,45,45,.32) 0 1px,rgba(40,255,90,.32) 1px 2px,rgba(60,110,255,.32) 2px 3px);
-  -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 46%,transparent 74%);
-  mask-image:radial-gradient(circle at 50% 50%,#000 0%,rgba(0,0,0,.55) 46%,transparent 74%);
-  opacity:calc(.35 + var(--pulse,0) * .65);
-  transition:opacity .09s ease-out;
+    repeating-linear-gradient(0deg,rgba(0,0,0,.45) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(90deg,rgba(255,45,45,.16) 0 1px,rgba(40,255,90,.16) 1px 2px,rgba(60,110,255,.16) 2px 3px);
+  /* Mostly the treble: the grid is the fast half of the signal, catching a
+     hi-hat while the light behind it swells on the kick. */
+  opacity:calc(.28 + var(--shimmer,0) * .42 + var(--pulse,0) * .18);
+  transition:opacity .08s ease-out;
   mix-blend-mode:multiply;
 }
-@keyframes halo1{0%,100%{transform:translate(-9%,-7%) scale(1)}   50%{transform:translate(8%,6%)   scale(1.17)}}
-@keyframes halo2{0%,100%{transform:translate(10%,5%)  scale(1.12)}50%{transform:translate(-8%,-9%) scale(.9)}}
-@keyframes halo3{0%,100%{transform:translate(1%,11%)  scale(.94)} 50%{transform:translate(-5%,-7%) scale(1.22)}}
-@media (prefers-reduced-motion:reduce){
-  #nphalo i{animation:none!important}
-  #nphalopulse{transform:none!important}
-}
+@media (prefers-reduced-motion:reduce){#nphalopulse{transform:none!important}}
 
-/* position:relative so the halo can be centred on the artwork rather than on
-   the screen: the glow belongs to the cover, and follows it up and down as the
-   player's height changes. */
-.npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px;position:relative}
+.npart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:14px 0 8px}
 /* Short of the full width on purpose: the artwork stops covering the light it
    is meant to be casting, and the glow has somewhere to land. */
 .npart .box{width:min(88%,312px);aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--elev2);box-shadow:0 26px 60px -14px rgba(0,0,0,.75);position:relative;transition:transform .3s cubic-bezier(.32,.72,0,1)}
@@ -496,6 +476,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 </div>
 
 <div id="np">
+  <div id="nphalo" aria-hidden="true"><div id="nphalopulse"></div></div>
   <div id="npbg"></div>
   <div class="nphead">
     <button class="iconbtn" id="npClose" aria-label="Minimize">
@@ -509,10 +490,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
       </button>
     </div>
   </div>
-  <div class="npart">
-    <div id="nphalo" aria-hidden="true"><div id="nphalopulse"><i></i><i></i><i></i></div></div>
-    <div class="box" id="npArt"></div>
-  </div>
+  <div class="npart"><div class="box" id="npArt"></div></div>
   <div class="npmeta">
     <div style="min-width:0"><h2 class="tr" id="npTtl">—</h2><p class="tr" id="npArtist">—</p></div>
     <div class="npbtns">
@@ -1312,82 +1290,56 @@ const HEART_OUTLINE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="non
 
 let npArtId = null;
 
-/* ═══ ambient halo ═════════════════════════════════════════
-   The colours behind the artwork come from the artwork. Read once per track
-   off a 24×24 downscale of the cover — small enough that the whole thing is a
-   few hundred pixels of work, large enough to survive a logo in one corner.
+/* ═══ ambient light ════════════════════════════════════════
+   The cover, reduced to twenty pixels a side and kept as a data URL. Blown
+   back up across the screen by the browser's own smoothing, those pixels are
+   the ambient light: soft by construction, and matching the artwork because
+   they ARE the artwork. Nothing is guessed, so nothing can be guessed wrong.
+
+   Eight a side and not fifty: enough that the sky stays above the ground and a
+   red sleeve on a dark background still reads as a red glow, few enough that
+   the picture dissolves into colour. At twenty the shapes were still legible
+   and it read as a blurred photograph parked behind the cover rather than as
+   light coming off it.
 
    Both the canvas and the image are same-origin (/art/…), so getImageData is
    allowed; it is still guarded, because a cover served from the offline cache
    after a redirect would taint the canvas and throw. */
-const paletteCache = new Map();
-const HALO_BINS = 12;
+const thumbCache = new Map();
+const THUMB_N = 8;
 
-/* Nothing to read: no cover yet, or the read failed. The library already
-   derives a colour from the title for the placeholder tile, so the glow keeps
-   the same identity as the letter the user is looking at. */
-function fallbackPalette(t) {
+/* No cover to read, or the read failed. The list already derives a colour
+   from the title for the placeholder tile, so the room keeps the identity of
+   the letter on screen. */
+function fallbackWash(t) {
   const h = hue((t.title || "") + (t.artist || ""));
-  return [h, (h + 38) % 360, (h + 322) % 360].map((x) => `hsl(${x} 62% 46%)`);
+  return `linear-gradient(160deg,hsl(${h} 45% 34%),hsl(${(h + 40) % 360} 40% 16%))`;
 }
 
-function extractPalette(img) {
-  const N = 24;
+function coverWash(img) {
   const c = document.createElement("canvas");
-  c.width = c.height = N;
+  c.width = c.height = THUMB_N;
   const ctx = c.getContext("2d");
   if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, N, N);
+  ctx.drawImage(img, 0, 0, THUMB_N, THUMB_N);
 
-  let data;
-  try { data = ctx.getImageData(0, 0, N, N).data; } catch { return null; }
+  let d;
+  try { d = ctx.getImageData(0, 0, THUMB_N, THUMB_N); } catch { return null; }
 
-  // Hue histogram, each pixel weighted by its own saturation: a mostly grey
-  // sleeve with one red stripe should glow red, not grey.
-  const bins = Array.from({ length: HALO_BINS }, () => ({ w: 0, x: 0, y: 0, s: 0 }));
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-    const l = (mx + mn) / 2;
-    // Near-black and near-white carry no usable hue, and a cover is mostly one
-    // or the other at the edges.
-    if (d < 0.06 || l < 0.08 || l > 0.94) continue;
-    const s = d / (1 - Math.abs(2 * l - 1));
-    let h;
-    if (mx === r) h = ((g - b) / d + 6) % 6;
-    else if (mx === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-
-    const bin = bins[Math.floor(h / (360 / HALO_BINS)) % HALO_BINS];
-    const w = s * s; // squared, so a vivid pixel outvotes several washed-out ones
-    bin.w += w;
-    bin.s += s * w;
-    // Hues are angles: averaged as numbers, 350° and 10° give 180°, which is
-    // the one colour neither pixel had. Summed as vectors they give 0°.
-    bin.x += Math.cos((h * Math.PI) / 180) * w;
-    bin.y += Math.sin((h * Math.PI) / 180) * w;
+  // Baked in rather than left to a CSS filter, which would have to run over
+  // the blown-up layer on every frame instead of over 400 pixels once.
+  // Saturation is pushed away from each pixel's own grey, so hues stay exactly
+  // where the photograph put them and only get louder; the dimming is what
+  // keeps a bright cover from washing out the text sitting on top of it.
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const grey = (px[i] + px[i + 1] + px[i + 2]) / 3;
+    for (let k = 0; k < 3; k++) {
+      px[i + k] = Math.max(0, Math.min(255, (grey + (px[i + k] - grey) * 1.5) * 0.72));
+    }
   }
-
-  const top = bins.filter((b) => b.w > 0).sort((a, b) => b.w - a.w).slice(0, 3);
-  if (!top.length) return null;
-
-  const cols = top.map((b) => {
-    const h = (Math.atan2(b.y, b.x) * 180) / Math.PI;
-    // Floors, not the measured values: the glow has to read on a near-black
-    // screen, and a muted cover would otherwise light nothing at all.
-    const s = Math.min(88, Math.max(52, (b.s / b.w) * 115));
-    return `hsl(${Math.round((h + 360) % 360)} ${Math.round(s)}% 50%)`;
-  });
-  // A cover with a single colour would light three identical pools stacked
-  // into one flat disc, so a neighbouring hue is invented to give it depth.
-  // Two is already enough: the third blob reuses the first (the caller cycles
-  // through the list), which reads better than a near-duplicate of the second.
-  if (cols.length === 1) {
-    const m = cols[0].match(/hsl\((\d+)/);
-    cols.push(`hsl(${((m ? Number(m[1]) : 30) + 34) % 360} 60% 44%)`);
-  }
-  return cols;
+  ctx.putImageData(d, 0, 0);
+  try { return `url(${c.toDataURL("image/png")})`; } catch { return null; }
 }
 
 /* ═══ the beat ═════════════════════════════════════════════
@@ -1550,17 +1502,14 @@ function syncHalo() {
 
 function applyHalo(t, img) {
   if (!t) return;
-  let cols = paletteCache.get(t.id);
-  if (!cols) {
-    cols = (img && extractPalette(img)) || fallbackPalette(t);
+  let wash = thumbCache.get(t.id);
+  if (!wash) {
+    wash = (img && coverWash(img)) || fallbackWash(t);
     // Only a real reading is worth keeping: a fallback used while the cover was
     // still loading would outlive the cover itself.
-    if (img) paletteCache.set(t.id, cols);
+    if (img) thumbCache.set(t.id, wash);
   }
-  const blobs = document.querySelectorAll("#nphalo i");
-  for (let i = 0; i < blobs.length; i++) {
-    blobs[i].style.setProperty("--c", cols[i % cols.length]);
-  }
+  $("#nphalopulse").style.backgroundImage = wash;
 }
 
 function setNpArt(t) {
@@ -1610,7 +1559,6 @@ function renderNow() {
   setNpArt(t);
   $("#npTtl").textContent = t.title;
   $("#npArtist").textContent = t.artist || "—";
-  $("#npbg").style.backgroundImage = `url(${artURL(t.id)})`;
   $("#npState").textContent = offline.has(t.id) ? "On this device" : "Streaming";
   $("#mFav").innerHTML = t.fav ? HEART_FILLED : HEART_OUTLINE;
   $("#mFav").classList.toggle("on", Boolean(t.fav));
@@ -2495,7 +2443,7 @@ async function deleteTrack(id) {
   await dropCachedArt(artURL(id));
   clearPos(id);
   envCache.delete(id);
-  paletteCache.delete(id);
+  thumbCache.delete(id);
   tracks = tracks.filter((t) => t.id !== id);
   // The library is cached on the device for the offline case, and that copy
   // is what a reload reads first. Without this the row comes back on the
