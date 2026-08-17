@@ -54,9 +54,14 @@ talk to a lawyer.
 ---
 
 <p align="center">
-  <img src="docs/library.png" alt="Library view on iPhone" width="45%">
-  <img src="docs/now-playing.png" alt="Now playing view on iPhone" width="45%">
+  <img src="docs/library.png" alt="The library on iPhone, ordered by plays, with a playlist beside the filters" width="45%">
+  <img src="docs/now-playing.png" alt="The full-screen player, lit by the artwork it is playing" width="45%">
+  <img src="docs/track-actions.png" alt="What a track offers: favourites, offline, playlists, 3D artwork, deletion" width="45%">
+  <img src="docs/podcasts.png" alt="Podcast subscriptions, each with its count of unplayed episodes" width="45%">
 </p>
+
+The library, the player, what a track offers, and the podcast subscriptions.
+Everything above is one screen deep from opening the app.
 
 The Chrome extension adds an **Add to Music** button straight into YouTube's
 action row, next to *Subscribe*. One click and the track is queued:
