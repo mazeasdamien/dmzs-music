@@ -18,7 +18,7 @@
       "binding": "DB",
       "database_name": "dmzs-music",
       // <- replaced by `npm run setup:db`
-      "database_id": "REPLACE_AFTER_CREATION"
+      "database_id": "24b23f61-5cba-4d0f-bd11-9d222b024da7"
     }
   ],
 
@@ -68,21 +68,28 @@
   // The zone must be on your Cloudflare account, with Cloudflare nameservers
   // active (required for a Worker, unlike Pages). `custom_domain` creates the
   // subdomain's DNS record on its own.
-  "routes": [{ "pattern": "music.example.com", "custom_domain": true }],
+  // music.dmzs-lab.com is no longer served from here. It now answers from the
+  // dmzs-lab-redirect Worker, which 308s to this host — 308 rather than 301 so
+  // that an extension activated against the old address keeps its method and
+  // body across the hop.
+  "routes": [
+    { "pattern": "music.agentxr.app", "custom_domain": true }
+  ],
 
   "triggers": {
-    // Podcast upkeep: re-read subscribed feeds (each feed at most once an
-    // hour) and drain the episode queue those refreshes fill. Every 20
-    // minutes rather than hourly: a pass that fails is retried soon instead
-    // of next hour, and a pass refreshes only five feeds, so the cadence is
-    // what keeps a longer subscription list coming round often enough.
+    // Podcast upkeep: re-read subscribed feeds (hourly per feed) and fetch
+    // queued episodes. Still every 20 minutes, but no longer for the reason
+    // it was chosen: the free plan's subrequest ceiling used to cut a pass
+    // short, and the paid plan's does not. What the cadence buys now is
+    // recovery — a pass that fails is retried in twenty minutes rather than
+    // in an hour — and room for more feeds than the five a pass refreshes.
     "crons": ["*/20 * * * *"]
   },
 
   "vars": {
     // Must match the public domain: the downloader calls the Worker back at
     // this address once a download is finished.
-    "APP_URL": "https://music.example.com"
+    "APP_URL": "https://music.agentxr.app"
   },
 
   "observability": { "enabled": true }

@@ -286,18 +286,7 @@ A Raspberry Pi left on removes the constraint entirely for about 3 W.
 
 ## Setup
 
-### 1. Make your own config, and pick your domain
-
-The configuration is not tracked, so your database id and your domain never
-reach a commit. Copy the template once:
-
-```bash
-cp wrangler.example.jsonc wrangler.jsonc
-```
-
-`wrangler.jsonc` is git-ignored from here on. When something about the
-configuration changes, change `wrangler.example.jsonc` too — it is what the
-next clone starts from, and nothing will warn you if it falls behind.
+### 1. Pick your domain
 
 The repository ships with `music.example.com` as a placeholder. Replace it in
 **four** places:
@@ -374,15 +363,15 @@ If you kept the `containers` block, this also builds the downloader image,
 install it:
 
 - `npx wrangler deploy --containers-rollout=none` deploys the Worker and
-  leaves the container as it was. Fine for a change that does not touch
+  leaves the container alone. Fine for a change that does not touch
   `downloader/`.
-- Let GitHub build it. `.github/workflows/deploy.yml` deploys on every push
-  that touches the Worker, the downloader or the config, on a runner that has
-  Docker. It needs two repository secrets, `CLOUDFLARE_API_TOKEN` and
-  `CLOUDFLARE_ACCOUNT_ID`, and two repository variables, `APP_DOMAIN` and
-  `D1_DATABASE_ID` — the config is git-ignored, so the workflow rebuilds it
-  from `wrangler.example.jsonc`. Which is also what keeps that template
-  honest: let it fall behind and the deploy fails.
+- Let Cloudflare build it, which is the better answer if the reason you put
+  the downloader in a container was to stop depending on your own machine.
+  **Workers Builds** connects this repository to the Worker and builds on
+  every push, image included: in the dashboard, Workers & Pages -> your Worker
+  -> Settings -> Builds. The Worker name there has to match `name` in
+  `wrangler.jsonc`, and the deploy command has to be `npx wrangler deploy`,
+  since `wrangler versions upload` does not update container images.
 
 ### 6. Activate your devices
 
