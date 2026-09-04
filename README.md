@@ -367,8 +367,22 @@ node scripts/secrets.mjs music.yourdomain.com
 npx wrangler deploy
 ```
 
-A few seconds: the Worker ships no container image, it is plain JavaScript and
-static assets. The DNS record for the subdomain is created for you.
+The DNS record for the subdomain is created for you.
+
+If you kept the `containers` block, this also builds the downloader image,
+**which needs Docker running locally**. Two ways out if you would rather not
+install it:
+
+- `npx wrangler deploy --containers-rollout=none` deploys the Worker and
+  leaves the container as it was. Fine for a change that does not touch
+  `downloader/`.
+- Let GitHub build it. `.github/workflows/deploy.yml` deploys on every push
+  that touches the Worker, the downloader or the config, on a runner that has
+  Docker. It needs two repository secrets, `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`, and two repository variables, `APP_DOMAIN` and
+  `D1_DATABASE_ID` — the config is git-ignored, so the workflow rebuilds it
+  from `wrangler.example.jsonc`. Which is also what keeps that template
+  honest: let it fall behind and the deploy fails.
 
 ### 6. Activate your devices
 
@@ -403,6 +417,23 @@ install button.
 > for offline downloads: they belong to the installed app, not to Safari.
 
 ### 8. Start the downloader
+
+**On Cloudflare**: nothing to start. If you kept the `containers` block in the
+config, queuing a track wakes an instance, it drains the queue and goes back to
+sleep, and the cron picks up anything a failed wake left behind. No machine of
+yours is involved.
+
+Two things to know before relying on it. The request to YouTube leaves from
+Cloudflare's egress range, which anti-bot filtering treats as a datacenter and
+therefore refuses far sooner than it refuses a home connection — low volume is
+what makes it workable, and `YT_COOKIES` the answer when it stops being (see
+*If YouTube blocks you*). And the instance is billed while awake, which is why
+it is woken per track rather than left polling: a container waiting on an
+empty queue around the clock costs more than the plan includes.
+
+Everything below still works, and still works better. The two can even run
+together: they claim through the same endpoint, and the claim is atomic, so
+whichever asks first gets the track.
 
 **Windows, without Docker** (Python, ffmpeg and Deno on `PATH`):
 

@@ -1,0 +1,73 @@
+name: Deploy
+
+# Deploying builds the downloader image, and building an image needs Docker.
+# Running it here rather than on a laptop is the whole point of moving the
+# downloader into a container: nothing about this project should require a
+# machine of yours to be switched on.
+on:
+  push:
+    branches: [main]
+    # Documentation and screenshots change far more often than the Worker, and
+    # a deploy that rebuilds the image for a README edit wastes several minutes
+    # for nothing.
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'downloader/**'
+      - 'wrangler.example.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # wrangler.jsonc is git-ignored, because it carries a database id and a
+      # domain that have no business in a public repository. So the deploy
+      # builds one from the tracked template.
+      #
+      # This is what stops the template rotting: it is no longer a copy that
+      # only a new clone would ever read, it is the file every deploy is built
+      # from. Let it fall behind and the deploy fails, loudly, here.
+      - name: Build the config from the template
+        env:
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+          D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
+        run: |
+          if [ -z "$APP_DOMAIN" ] || [ -z "$D1_DATABASE_ID" ]; then
+            echo "Set the repository variables APP_DOMAIN and D1_DATABASE_ID." >&2
+            exit 1
+          fi
+          sed -e "s|music\.example\.com|$APP_DOMAIN|g" \
+              -e "s|REPLACE_AFTER_CREATION|$D1_DATABASE_ID|" \
+              wrangler.example.jsonc > wrangler.jsonc
+          # Fail here rather than three minutes into an image build.
+          if grep -q -e 'music\.example\.com' -e 'REPLACE_AFTER_CREATION' wrangler.jsonc; then
+            echo "A placeholder survived the substitution." >&2
+            exit 1
+          fi
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy

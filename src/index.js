@@ -9,8 +9,77 @@ import {
 } from "./auth.js";
 import { videoIdFrom, parseRange } from "./util.js";
 import { parseFeed, feedUrlFrom, extFor } from "./feed.js";
+import { Container, getContainer } from "@cloudflare/containers";
 
 export { videoIdFrom, parseRange };
+
+/**
+ * The downloader, running on Cloudflare instead of on a machine at home.
+ *
+ * It is the same image and the same job protocol either way: the container
+ * claims work through /internal/next-job exactly as the home downloader does,
+ * so the atomic claim, the leases and the failure reporting are shared rather
+ * than reimplemented, and either one can cover for the other. What changes is
+ * only who starts it. At home a loop asks every 30 seconds; here nothing asks
+ * until the Worker has something to hand over.
+ *
+ * That is also what makes it affordable. An instance left polling an empty
+ * queue is billed for the waiting, and at 24/7 that is more than the plan
+ * includes. Woken per track, a handful of tracks a month costs seconds.
+ *
+ * The catch is the address. This leaves for YouTube from Cloudflare's egress
+ * range, which anti-bot filtering classifies as a datacenter long before the
+ * first request; a home connection does not have that problem. Low volume is
+ * the mitigating factor, and YT_COOKIES the lever if it stops being enough.
+ */
+export class Downloader extends Container {
+  defaultPort = 8080;
+
+  // Long enough to survive the gap between two tracks added in one sitting,
+  // short enough that a forgotten instance is not billed for the evening. A
+  // drain in flight keeps it alive on its own; this only counts idle time.
+  sleepAfter = "3m";
+
+  // The container talks back to this Worker, so it needs the same address and
+  // token the home downloader is given. MODE is what picks the served entry
+  // point over the polling one, out of the one image that carries both.
+  envVars = {
+    MODE: "serve",
+    APP_URL: this.env.APP_URL,
+    WORKER_TOKEN: this.env.WORKER_TOKEN || "",
+    // Optional, and the answer if YouTube starts refusing: cookies from a
+    // signed-in browser, and a proxy to leave from somewhere else.
+    YT_COOKIES: this.env.YT_COOKIES || "",
+    YT_PROXY: this.env.YT_PROXY || "",
+  };
+
+  onError(error) {
+    console.log("[container] error:", String(error && error.message ? error.message : error));
+  }
+}
+
+/**
+ * Asks the container to drain the queue, if there is a container at all.
+ *
+ * Guarded on the binding rather than assumed, because the container is opt-in:
+ * a clone that runs the downloader at home has no DOWNLOADER binding, and
+ * queuing a track there must not fail on its absence. The wake is fire and
+ * forget for the same reason the queue exists — the track is already safely
+ * pending, so a failed wake costs a delay, not the job.
+ */
+function wakeDownloader(env, ctx) {
+  if (!env.DOWNLOADER || !ctx) return;
+  ctx.waitUntil(
+    getContainer(env.DOWNLOADER)
+      .fetch("http://downloader/drain", { method: "POST" })
+      .then(async (r) => {
+        console.log("[container] drain:", r.status, (await r.text()).slice(0, 200));
+      })
+      .catch((e) => {
+        console.log("[container] wake failed:", String(e && e.message ? e.message : e));
+      })
+  );
+}
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
@@ -597,6 +666,7 @@ async function handleApi(request, env, path, ctx) {
         .run();
     }
 
+    wakeDownloader(env, ctx);
     return json({ id }, 202);
   }
 
@@ -1002,6 +1072,16 @@ export default {
           .all();
         for (const pod of results ?? []) await refreshPodcast(env, pod);
         await processEpisodeQueue(env, 8 * 60 * 1000, 15);
+
+        // Backstop for the container. Queuing a track wakes it, but a wake
+        // that failed — a deploy in flight, an instance that would not start —
+        // would otherwise leave the track pending until something else was
+        // added. Cheap to check: one indexed lookup, and the wake is skipped
+        // entirely when the queue is empty or no container is configured.
+        const pending = await env.DB.prepare(
+          "SELECT 1 FROM tracks WHERE status = 'pending' LIMIT 1"
+        ).first();
+        if (pending) wakeDownloader(env, ctx);
       })()
     );
   },

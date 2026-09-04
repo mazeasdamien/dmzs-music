@@ -404,7 +404,16 @@ def handle(job: dict) -> bool:
 
 
 # -- polling loop --------------------------------------------------------
-def main() -> None:
+def main(drain_once: bool = False) -> None:
+    """
+    Polls for work until stopped.
+
+    With `drain_once`, an empty queue returns instead of waiting. That is the
+    Cloudflare Containers shape: the instance is woken by the Worker, takes
+    everything that is queued, and returns so it can be put back to sleep.
+    Polling an empty queue there would be paid-for idling, which is the one
+    thing an on-demand instance exists to avoid.
+    """
     if not APP_URL or not TOKEN:
         raise SystemExit(
             "APP_URL and WORKER_TOKEN are required.\n"
@@ -440,6 +449,12 @@ def main() -> None:
                 # wipeout in under a minute. Anti-bot filtering is applied to
                 # the IP, not the request: the only useful response is to stop
                 # asking for a while.
+                if drain_once:
+                    # Sleeping it off would be billed by the second, and the
+                    # instance is woken on demand anyway. Hand back instead and
+                    # let the next track's wake-up be the retry.
+                    print("[poll] anti-bot filtering, handing back")
+                    return
                 print(f"[poll] anti-bot filtering, pausing {BOT_COOLDOWN / 60:.0f} min")
                 time.sleep(BOT_COOLDOWN)
                 continue
@@ -448,6 +463,9 @@ def main() -> None:
             # back, without waiting an interval between each.
             continue
 
+        if drain_once:
+            print("[poll] queue empty, done")
+            return
         if not idle:
             # One line when going idle, rather than a log every 30 s.
             print("[poll] queue empty, waiting")

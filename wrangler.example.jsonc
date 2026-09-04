@@ -29,16 +29,41 @@
     }
   ],
 
-  // No `containers` and no `durable_objects`: the downloader runs on a
-  // personal machine and pulls work from /internal/next-job.
+  // The downloader, as a container, so that nothing has to be running at
+  // home. It is opt-in: delete the three blocks below and the Worker goes
+  // back to handing jobs to whatever polls /internal/next-job from your own
+  // machine, which is still supported and still the more reliable of the two.
   //
-  // Not for the cost. A Workers Paid plan includes a container allowance that
-  // a library this size never comes close to spending. The reason is the
-  // address the request leaves from. A container egresses through Cloudflare's
-  // ranges, and datacenter ranges are classified as such by YouTube's bot
-  // filtering long before your first request arrives; a residential
-  // connection is the only kind that keeps working over time. So the machine
-  // that fetches has to be one, which also means it has to be yours.
+  // Know what you are choosing. A container leaves for YouTube from
+  // Cloudflare's egress range, and anti-bot filtering classifies datacenter
+  // ranges as such long before the first request; a home connection does not
+  // carry that handicap. Low volume is what makes it workable, and YT_COOKIES
+  // the lever when it stops being enough.
+  //
+  // It is woken per track rather than left polling. An instance waiting on an
+  // empty queue is billed for the waiting, and around the clock that costs
+  // more than the plan includes; woken, a track costs seconds.
+  //
+  // `basic` because deno has to solve YouTube's JavaScript challenge and the
+  // `lite` tier's 256 MiB is thin for it; the remux is a stream copy and costs
+  // almost nothing. One instance, because two would race for the same rows and
+  // the atomic claim would only refuse the loser.
+  "containers": [
+    {
+      "class_name": "Downloader",
+      "image": "./downloader/Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+
+  // A container's lifecycle is held by a Durable Object. This is the only one
+  // in the project.
+  "durable_objects": {
+    "bindings": [{ "name": "DOWNLOADER", "class_name": "Downloader" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Downloader"] }],
 
   // The zone must be on your Cloudflare account, with Cloudflare nameservers
   // active (required for a Worker, unlike Pages). `custom_domain` creates the
