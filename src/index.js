@@ -480,13 +480,20 @@ async function enforceRetention(env, podId) {
 }
 
 /**
- * Drains a little of the fetch queue. Called from a cron and, via
- * waitUntil(), right after any user action that queues something, so the
- * common case ("subscribe, hear it now") finishes in seconds while the cron
- * remains the backstop. Small batches on purpose: the free plan allows 50
- * subrequests per invocation, and each episode costs a handful.
+ * Drains the fetch queue. Called from a cron and, via waitUntil(), right
+ * after any user action that queues something, so the common case
+ * ("subscribe, hear it now") finishes in seconds while the cron remains the
+ * backstop.
+ *
+ * Batches were two at a time because the free plan allows 50 subrequests per
+ * invocation and each episode costs a handful of them. On the paid plan that
+ * ceiling is 10,000, so the binding constraint is now wall clock: a cron
+ * invocation is cut off at fifteen minutes whatever the plan. Hence a budget
+ * to spend rather than a batch kept artificially small. Episodes are fetched
+ * one after another and streamed straight into R2, so a larger batch costs
+ * no memory either.
  */
-async function processEpisodeQueue(env, budgetMs = 20000, batch = 2) {
+async function processEpisodeQueue(env, budgetMs = 20000, batch = 3) {
   const started = Date.now();
 
   // Lease expired: a waitUntil() that was cut short, a crashed cron run.
@@ -754,7 +761,7 @@ async function handleApi(request, env, path, ctx) {
     const episodes = e.results ?? [];
     // A fetch queue left behind by a closed tab restarts on the next open.
     if (ctx && episodes.some((x) => x.status === "queued" || x.status === "fetching")) {
-      ctx.waitUntil(processEpisodeQueue(env, 20000, 2));
+      ctx.waitUntil(processEpisodeQueue(env, 20000, 3));
     }
     return json({ podcasts: p.results ?? [], episodes });
   }
@@ -784,7 +791,7 @@ async function handleApi(request, env, path, ctx) {
     const { added } = await insertEpisodes(env, id, feed);
     if (ctx) {
       ctx.waitUntil(storePodArt(env, id, feed.image));
-      ctx.waitUntil(processEpisodeQueue(env, 25000, 2));
+      ctx.waitUntil(processEpisodeQueue(env, 25000, 3));
     }
     return json({ id, added }, 201);
   }
@@ -799,7 +806,7 @@ async function handleApi(request, env, path, ctx) {
       .first();
     if (!pod) return json({ error: "Unknown podcast" }, 404);
     const r = await refreshPodcast(env, pod);
-    if (ctx && r.queued) ctx.waitUntil(processEpisodeQueue(env, 25000, 2));
+    if (ctx && r.queued) ctx.waitUntil(processEpisodeQueue(env, 25000, 3));
     return json(r);
   }
 
@@ -828,7 +835,7 @@ async function handleApi(request, env, path, ctx) {
     )
       .bind(epFetch[1])
       .run();
-    if (r.meta?.changes && ctx) ctx.waitUntil(processEpisodeQueue(env, 25000, 2));
+    if (r.meta?.changes && ctx) ctx.waitUntil(processEpisodeQueue(env, 25000, 3));
     return json({ ok: Boolean(r.meta?.changes) });
   }
 
@@ -976,9 +983,14 @@ export default {
   },
 
   // Podcast upkeep. Each pass re-reads a few feeds (each feed at most once
-  // an hour) and drains a couple of queued episodes; the next pass picks up
-  // where this one stopped. Deliberately small: the free plan allows 50
-  // subrequests per invocation, and patience is free.
+  // an hour) and drains the queue those refreshes fill. A refresh queues at
+  // most AUTO_QUEUE_MAX per feed, so fifteen covers a full pass over the five
+  // feeds this reads: the queue empties in one go instead of trickling out
+  // over the following hour.
+  //
+  // The budget is checked between episodes, never during one, so the last can
+  // overrun it. Eight minutes leaves that overrun room under the fifteen a
+  // cron invocation gets before it is cut off.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
       (async () => {
@@ -989,7 +1001,7 @@ export default {
           .bind(Date.now() - 55 * 60 * 1000)
           .all();
         for (const pod of results ?? []) await refreshPodcast(env, pod);
-        await processEpisodeQueue(env, 5 * 60 * 1000, 2);
+        await processEpisodeQueue(env, 8 * 60 * 1000, 15);
       })()
     );
   },
