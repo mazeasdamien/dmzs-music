@@ -286,7 +286,18 @@ A Raspberry Pi left on removes the constraint entirely for about 3 W.
 
 ## Setup
 
-### 1. Pick your domain
+### 1. Make your own config, and pick your domain
+
+The configuration is not tracked, so your database id and your domain never
+reach a commit. Copy the template once:
+
+```bash
+cp wrangler.example.jsonc wrangler.jsonc
+```
+
+`wrangler.jsonc` is git-ignored from here on. When something about the
+configuration changes, change `wrangler.example.jsonc` too — it is what the
+next clone starts from, and nothing will warn you if it falls behind.
 
 The repository ships with `music.example.com` as a placeholder. Replace it in
 **four** places:

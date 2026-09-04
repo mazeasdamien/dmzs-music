@@ -9,6 +9,10 @@ downloader/.venv/
 downloader/.env
 cookies.txt
 
+# local configuration: carries your own database id and domain. Copy it from
+# wrangler.example.jsonc, and keep that example current when this changes.
+wrangler.jsonc
+
 # build and runtime artefacts
 .wrangler/
 __pycache__/
