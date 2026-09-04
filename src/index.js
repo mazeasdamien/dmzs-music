@@ -643,9 +643,11 @@ async function handleApi(request, env, path, ctx) {
       return json({ id, duplicate: true }, 200);
     }
 
-    // The track is simply queued. The downloader will claim it on its next
-    // poll: nothing to wake up here, and adding from the phone stays instant
-    // even when the machine is switched off.
+    // The track is queued, and that is what makes adding from the phone
+    // instant: the reply does not wait on the download, or on anything being
+    // awake to take it. The wake below is a nudge, not a handover — a
+    // downloader polling from home never sees it, and a container that fails
+    // to start leaves the row pending for the cron to notice.
     const STAGE = "Waiting for the downloader…";
 
     if (!existing) {
