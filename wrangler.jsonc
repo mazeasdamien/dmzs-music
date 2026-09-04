@@ -8,8 +8,8 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    // Le Worker passe en premier : il doit contrôler le cookie avant
-    // de servir le moindre fichier.
+    // The Worker runs first: it has to check the cookie before serving
+    // any file at all.
     "run_worker_first": true
   },
 
@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "dmzs-music",
-      // ← remplacé par `npm run setup:db`
+      // <- replaced by `npm run setup:db`
       "database_id": "REPLACE_AFTER_CREATION"
     }
   ],
@@ -29,20 +29,34 @@
     }
   ],
 
-  // Pas de `containers` ni de `durable_objects` : le téléchargeur tourne sur
-  // une machine perso et vient chercher le travail via /internal/next-job.
-  // C'est ce qui garde le projet entièrement dans les paliers gratuits — les
-  // Containers Cloudflare n'ont aucun palier gratuit — et ce qui lui donne une
-  // IP résidentielle, la seule qui passe durablement le filtrage de YouTube.
+  // No `containers` and no `durable_objects`: the downloader runs on a
+  // personal machine and pulls work from /internal/next-job.
+  //
+  // Not for the cost. A Workers Paid plan includes a container allowance that
+  // a library this size never comes close to spending. The reason is the
+  // address the request leaves from. A container egresses through Cloudflare's
+  // ranges, and datacenter ranges are classified as such by YouTube's bot
+  // filtering long before your first request arrives; a residential
+  // connection is the only kind that keeps working over time. So the machine
+  // that fetches has to be one, which also means it has to be yours.
 
-  // La zone example.com doit être sur ton compte Cloudflare, avec les serveurs
-  // de noms Cloudflare actifs (obligatoire pour un Worker, contrairement à
-  // Pages). `custom_domain` crée l'enregistrement DNS du sous-domaine tout seul.
+  // The zone must be on your Cloudflare account, with Cloudflare nameservers
+  // active (required for a Worker, unlike Pages). `custom_domain` creates the
+  // subdomain's DNS record on its own.
   "routes": [{ "pattern": "music.example.com", "custom_domain": true }],
 
+  "triggers": {
+    // Podcast upkeep: re-read subscribed feeds (each feed at most once an
+    // hour) and drain the episode queue those refreshes fill. Every 20
+    // minutes rather than hourly: a pass that fails is retried soon instead
+    // of next hour, and a pass refreshes only five feeds, so the cadence is
+    // what keeps a longer subscription list coming round often enough.
+    "crons": ["*/20 * * * *"]
+  },
+
   "vars": {
-    // Doit correspondre au domaine public : le conteneur rappelle le Worker
-    // à cette adresse une fois le téléchargement terminé.
+    // Must match the public domain: the downloader calls the Worker back at
+    // this address once a download is finished.
     "APP_URL": "https://music.example.com"
   },
 
