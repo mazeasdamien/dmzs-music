@@ -51,6 +51,10 @@ POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "30"))
 # and no polling interval will talk you out of it.
 BOT_COOLDOWN = float(os.environ.get("BOT_COOLDOWN", "1800"))
 
+# Ceiling on a single drain, which only applies to the served mode. See the
+# note in main(): an instance is billed while the request is open.
+DRAIN_MAX_SECONDS = float(os.environ.get("DRAIN_MAX_SECONDS", "1800"))
+
 COOKIE_FILE = None
 if YT_COOKIES.strip():
     COOKIE_FILE = "/tmp/yt-cookies.txt"
@@ -424,13 +428,31 @@ def main(drain_once: bool = False) -> None:
     print(f"[boot] polling {APP_URL} every {POLL_INTERVAL:.0f} s")
     errors = 0
     idle = False
+    started = time.monotonic()
 
     while True:
+        # A drain is billed until it returns, so no path through this loop may
+        # run unbounded. Guarding each exit is the fix; this is the floor under
+        # it, so the next one anybody forgets costs half an hour rather than a
+        # month. Well past a real queue: tracks take about twenty seconds.
+        if drain_once and time.monotonic() - started > DRAIN_MAX_SECONDS:
+            print("[poll] drain budget spent, handing back")
+            return
         try:
             job = fetch_job()
             errors = 0
         except Exception as e:  # noqa: BLE001
             errors += 1
+            if drain_once:
+                # Every second spent here is billed, because the request that
+                # started the drain is still open and an instance with an open
+                # request is never idle. Waiting also buys nothing: a Worker
+                # that cannot be reached now will be reached by the next
+                # wake-up, on a fresh instance, or not at all. This was the one
+                # exit that did not hand back, and it cost about seven dollars
+                # a month in an instance that never slept.
+                print(f"[poll] unreachable ({e}), handing back")
+                return
             # Worker unreachable (network cut, deploy in progress): back off
             # instead of hammering, up to 5 minutes between attempts.
             delay = min(POLL_INTERVAL * 2 ** min(errors, 4), 300)
