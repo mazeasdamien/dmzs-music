@@ -279,9 +279,16 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 
    Edge to edge, with no mask. It used to be an ellipse behind the record,
    which read as a lamp placed behind the sleeve; the whole screen lit is a
-   room, and the veil below is what keeps the words legible in it. */
+   room, and the veil below is what keeps the words legible in it.
+
+   isolation:isolate is not decoration. The mask used to force this element
+   into a composited group of its own; without one, WebKit is left to decide
+   how three composited layers and their parent get flattened, and on iOS it
+   decided wrong: the page came up black. Saying it outright leaves nothing
+   to decide. */
 #nphalo{
   position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+  isolation:isolate;
   opacity:0;transition:opacity .7s ease;
 }
 #np.up #nphalo{opacity:1}
@@ -300,13 +307,17 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    one, and two bright copies of the same colours add up to a room that is
    already lit before the kick lands: the swing has to have somewhere to go.
 
-   The -24% inset is what the rotation and the slide are paid with: five
+   The -14% inset is what the rotation and the slide are paid with: two
    degrees and a few percent of travel never uncover a corner of a phone
-   screen. The transform is owned by the keyframes, which is why the beat is
-   not in it — an animation replaces the base transform rather than adding to
-   it, so this layer breathes through opacity only. */
+   screen. Not wider than that, on purpose. Every composited layer here is
+   the size of the screen and more, backed at three device pixels a side, and
+   iOS keeps a budget for the lot; a second layer half again the size of the
+   first was enough to blow it, at which point Safari draws nothing at all.
+   The transform is owned by the keyframes, which is why the beat is not in
+   it — an animation replaces the base transform rather than adding to it,
+   so this layer breathes through opacity only. */
 #nphalodrift{
-  position:absolute;inset:-24%;
+  position:absolute;inset:-14%;
   background-size:cover;background-position:center;
   transform:rotate(180deg);
   opacity:calc(.3 + var(--shimmer,0) * .25);
@@ -315,9 +326,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   will-change:transform,opacity;
 }
 @keyframes drift{
-  0%{transform:rotate(176deg) translate(-3%,2%) scale(1.02)}
-  50%{transform:rotate(181deg) translate(2%,-2.5%) scale(1.13)}
-  100%{transform:rotate(185deg) translate(3%,3%) scale(1.04)}
+  0%{transform:rotate(178deg) translate(-3%,2%) scale(1.02)}
+  50%{transform:rotate(180.5deg) translate(2%,-2.5%) scale(1.12)}
+  100%{transform:rotate(182deg) translate(3%,3%) scale(1.04)}
 }
 
 /* --pulse is 0…1, rewritten by the rAF loop. Scale and brightness together:
@@ -344,19 +355,23 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    Over the whole screen, since the light is: it is inside #nphalo and
    inherits its edges, so wherever there is light there is a panel showing it.
 
-   multiply keeps it honest: darkening the near-black page does nothing, so
-   the grid only shows where there is light to cut up, and follows the beat
-   through its own opacity. */
+   Plain translucency, and no blend mode. It was multiply, which kept the
+   grid off the black page for free; but a blended layer over composited
+   siblings is exactly the case iOS Safari gets wrong, and it got it wrong
+   here: the whole panel came out as a sheet of opaque black over the light.
+   Translucent black rows are multiply to the eye anyway, and with the light
+   everywhere there is no black page left to keep the grid off. The colour
+   columns are fainter than they were, since they no longer need the light
+   behind them to be seen. */
 #nphalo::after{
   content:"";position:absolute;inset:0;pointer-events:none;
   background-image:
     repeating-linear-gradient(0deg,rgba(0,0,0,.4) 0 1px,transparent 1px 4px),
-    repeating-linear-gradient(90deg,rgba(255,45,45,.16) 0 1px,rgba(40,255,90,.16) 1px 2px,rgba(60,110,255,.16) 2px 3px);
+    repeating-linear-gradient(90deg,rgba(255,45,45,.1) 0 1px,rgba(40,255,90,.1) 1px 2px,rgba(60,110,255,.1) 2px 3px);
   /* Mostly the treble: the grid is the fast half of the signal, catching a
      hi-hat while the light behind it swells on the kick. */
   opacity:calc(.28 + var(--shimmer,0) * .42 + var(--pulse,0) * .18);
   transition:opacity .08s ease-out;
-  mix-blend-mode:multiply;
 }
 @media (prefers-reduced-motion:reduce){#nphalopulse,#nphalodrift{transform:none!important;animation:none!important}}
 
