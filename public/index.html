@@ -248,7 +248,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    AFTER the light in the document: both are z-index -1, so the later one wins,
    and a veil painted underneath would veil nothing. */
 #npbg{position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(9,9,11,.5) 0%,transparent 30%,transparent 55%,rgba(9,9,11,.66) 80%,rgba(9,9,11,.9) 100%)}
+  background:linear-gradient(180deg,rgba(9,9,11,.5) 0%,transparent 30%,transparent 55%,rgba(9,9,11,.48) 82%,rgba(9,9,11,.75) 100%)}
 
 /* Three columns rather than space-between, and the outer two share a width.
    Under space-between the label only lands in the middle while both sides
@@ -296,6 +296,10 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
    one catches it repeating. The treble lifts it a little, so the top end of
    the mix is felt as a glow and not only as the grid.
 
+   Kept dim on purpose. The beat is the layer above brightening over this
+   one, and two bright copies of the same colours add up to a room that is
+   already lit before the kick lands: the swing has to have somewhere to go.
+
    The -24% inset is what the rotation and the slide are paid with: five
    degrees and a few percent of travel never uncover a corner of a phone
    screen. The transform is owned by the keyframes, which is why the beat is
@@ -305,7 +309,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
   position:absolute;inset:-24%;
   background-size:cover;background-position:center;
   transform:rotate(180deg);
-  opacity:calc(.55 + var(--shimmer,0) * .3);
+  opacity:calc(.3 + var(--shimmer,0) * .25);
   transition:opacity .1s ease-out;
   animation:drift 26s ease-in-out infinite alternate;
   will-change:transform,opacity;
@@ -328,7 +332,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
      -14% inset is what pays for them: the light can slide without ever
      uncovering an edge. */
   transform:translate(calc(var(--lx,0) * 1px),calc(var(--ly,0) * 1px)) scale(calc(1 + var(--pulse,0) * .11));
-  opacity:calc(.38 + var(--pulse,0) * .5);
+  opacity:calc(.3 + var(--pulse,0) * .65);
   transition:transform .1s ease-out,opacity .1s ease-out;
   will-change:transform,opacity;
 }
@@ -480,7 +484,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior
 #np .glass::before{
   content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
   background:radial-gradient(90% 60% at calc(50% + var(--gy,0) * 1%) calc(-8% + var(--gx,0) * 1%),
-    rgba(255,255,255,.32),rgba(255,255,255,.06) 55%,transparent 78%);
+    rgba(255,255,255,.38),rgba(255,255,255,.06) 55%,transparent 78%);
 }
 #np .glass:active{transform:scale(.9);background:rgba(255,255,255,.2);opacity:1}
 /* Tinted glass for the states that mean something: a starred track, a
