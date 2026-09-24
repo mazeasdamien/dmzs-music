@@ -22,10 +22,13 @@ Environment variables:
   POLL_INTERVAL  seconds between empty polls         (default 30)
   YT_COOKIES     Netscape cookies, if anti-bot kicks in
   YT_PROXY       http://user:pass@host:port
+  JOB_MAX_SECONDS     ceiling on one track               (default 600)
+  SUBPROCESS_TIMEOUT  ceiling on one ffmpeg/ffprobe call (default 300)
 """
 
 import base64
 import json
+import multiprocessing
 import os
 import re
 import subprocess
@@ -54,6 +57,17 @@ BOT_COOLDOWN = float(os.environ.get("BOT_COOLDOWN", "1800"))
 # Ceiling on a single drain, which only applies to the served mode. See the
 # note in main(): an instance is billed while the request is open.
 DRAIN_MAX_SECONDS = float(os.environ.get("DRAIN_MAX_SECONDS", "1800"))
+
+# Ceiling on a single track, in both modes. The drain ceiling above is only
+# checked between tracks, so a track that never finishes never reaches it: the
+# request stays open, the instance is never idle, and it is billed around the
+# clock: $0.21 a day, which is what the bill showed from 19 September. A track
+# takes about twenty seconds; ten minutes is far past any real one.
+JOB_MAX_SECONDS = float(os.environ.get("JOB_MAX_SECONDS", "600"))
+
+# ffmpeg and ffprobe copy streams (a re-encode at worst), which takes seconds.
+# Without a timeout a stuck one would hold the track, and so the drain, forever.
+SUBPROCESS_TIMEOUT = float(os.environ.get("SUBPROCESS_TIMEOUT", "300"))
 
 COOKIE_FILE = None
 if YT_COOKIES.strip():
@@ -185,18 +199,27 @@ def split_title(info: dict) -> tuple[str, str]:
 
 # -- ffmpeg --------------------------------------------------------------
 def run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=SUBPROCESS_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"{cmd[0]} timed out after {SUBPROCESS_TIMEOUT:.0f} s") from None
     if proc.returncode != 0:
         tail = (proc.stderr or "")[-600:]
         raise RuntimeError(f"{cmd[0]} failed: {tail}")
 
 
 def probe_codec(path: str) -> str:
-    proc = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "a:0",
-         "-show_entries", "stream=codec_name", "-of", "csv=p=0", path],
-        capture_output=True, text=True,
-    )
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a:0",
+             "-show_entries", "stream=codec_name", "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"ffprobe timed out after {SUBPROCESS_TIMEOUT:.0f} s") from None
     return (proc.stdout or "").strip().lower()
 
 
@@ -305,6 +328,9 @@ def process(job: dict) -> None:
             "progress_hooks": [hook],
             "retries": 3,
             "fragment_retries": 3,
+            # A connection that stops sending raises instead of waiting. The
+            # retries above then have something to retry.
+            "socket_timeout": 30,
             # Easing off: hammering the API brings anti-bot filtering on faster.
             "sleep_interval_requests": 1,
         }
@@ -407,6 +433,63 @@ def handle(job: dict) -> bool:
         return blocked
 
 
+# -- one track, with a deadline ------------------------------------------
+BLOCKED_EXIT = 3
+
+
+def _job_child(job: dict) -> None:
+    raise SystemExit(BLOCKED_EXIT if handle(job) else 0)
+
+
+def run_with_deadline(target, args: tuple, seconds: float) -> int | None:
+    """
+    Runs target(*args) in a child process. Returns its exit code, or None when
+    it was still running after `seconds` and had to be stopped.
+
+    A child process rather than a thread, because a thread cannot be stopped:
+    yt-dlp runs in-process, and when it hangs only killing the process ends it.
+    "spawn" rather than fork, because server.py calls this from a threaded
+    HTTP server, and forking a threaded process can deadlock the child.
+    """
+    child = multiprocessing.get_context("spawn").Process(
+        target=target, args=args, daemon=True)
+    child.start()
+    child.join(seconds)
+    if not child.is_alive():
+        return child.exitcode
+    child.terminate()
+    child.join(10)
+    if child.is_alive():
+        child.kill()
+        child.join()
+    return None
+
+
+def handle_with_deadline(job: dict) -> bool:
+    """
+    handle(), stopped past JOB_MAX_SECONDS. Same return value: True when the
+    failure was anti-bot filtering.
+
+    A stopped track is reported as failed. Left alone, it would sit in
+    'downloading' until the Worker's lease handed it back as pending, and the
+    cron's backstop would wake the container for it every twenty minutes,
+    which is the loop this exists to break.
+    """
+    code = run_with_deadline(_job_child, (job,), JOB_MAX_SECONDS)
+    if code is None:
+        print(f"[job] {job['id']} — over {JOB_MAX_SECONDS:.0f} s, stopped")
+        report_fail(job["id"], f"Stopped after {JOB_MAX_SECONDS / 60:.0f} "
+                               "minutes without finishing. Add it again to retry.")
+        return False
+    if code == BLOCKED_EXIT:
+        return True
+    if code != 0:
+        # handle() reports its own failures, so a non-zero exit means the child
+        # died before it could: killed for memory, or the interpreter itself.
+        report_fail(job["id"], f"The downloader stopped unexpectedly (exit {code}).")
+    return False
+
+
 # -- polling loop --------------------------------------------------------
 def main(drain_once: bool = False) -> None:
     """
@@ -463,7 +546,7 @@ def main(drain_once: bool = False) -> None:
         if job:
             idle = False
             print(f"[poll] job received: {job['id']}")
-            blocked = handle(job)
+            blocked = handle_with_deadline(job)
 
             if blocked:
                 # Without this the loop went straight back for the next job and
