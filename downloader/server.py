@@ -19,6 +19,8 @@ keeps the atomic claim, the leases and the failure reporting identical on both
 
 import json
 import os
+import signal
+import sys
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -80,6 +82,14 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     if not downloader.APP_URL or not downloader.TOKEN:
         raise SystemExit("APP_URL and WORKER_TOKEN are required.")
+    # sleepAfter does not kill the instance, it sends SIGTERM and waits for it
+    # to exit. The Dockerfile execs this, so it runs as PID 1, and the kernel
+    # drops any signal PID 1 has no handler for. Python installs none for
+    # SIGTERM: every signal was ignored, the Container class re-armed its timer
+    # and asked again three minutes later, and the instance never slept. That
+    # was the whole bill, not a stuck drain. The signal only comes once no
+    # request is in flight, so leaving at once abandons nothing.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     print(f"[boot] listening on :{PORT}, draining {downloader.APP_URL} on request")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
